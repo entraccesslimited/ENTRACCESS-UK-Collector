@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter
 from sqlalchemy import select
 
-from app import collection
+from app import collection, geofence
 from app.deps import SessionDep, StaffUser
 from app.models import Authorisation, CheckResult, Child, DoorCheck, User
 from app.schemas import (
@@ -15,8 +15,10 @@ from app.schemas import (
     ChildOut,
     CodeCheckIn,
     DecisionIn,
+    GeofenceOut,
     HandoverOut,
     PassCheckIn,
+    PositionIn,
 )
 
 router = APIRouter(prefix="/door", tags=["door"])
@@ -33,7 +35,20 @@ MESSAGES: dict[CheckResult, str] = {
     CheckResult.ALREADY_USED: "This one-off pass has already been used. Do not release.",
     CheckResult.WRONG_CODE: "That code does not match any collector for this child.",
     CheckResult.LOCKED: "Too many wrong codes for this child. Call the parent.",
+    CheckResult.OUTSIDE_GEOFENCE: (
+        "This phone is outside the nursery's geofence. Checks can only be made on site."
+    ),
+    CheckResult.NO_LOCATION: (
+        "The nursery has a geofence, and this phone did not share its location. "
+        "Allow location for this site and try again."
+    ),
 }
+
+
+def _position(body: PositionIn | None) -> geofence.Position | None:
+    if body is None or not geofence.valid_coordinates(body.latitude, body.longitude):
+        return None
+    return geofence.Position(body.latitude, body.longitude, body.accuracy_m)
 
 
 async def _out(session: SessionDep, check: DoorCheck) -> CheckOut:
@@ -75,15 +90,25 @@ async def children(staff: StaffUser, session: SessionDep) -> list[Child]:
     return list(rows.all())
 
 
+@router.get("/geofence", response_model=GeofenceOut)
+async def door_geofence(staff: StaffUser, session: SessionDep) -> GeofenceOut:
+    """Whether the door screen must send its position with each check."""
+    nursery = await collection.nursery_of(session, staff)
+    fence = collection.fence_of(nursery)
+    return GeofenceOut(enabled=fence is not None)
+
+
 @router.post("/check/pass", response_model=CheckOut)
 async def check_pass(body: PassCheckIn, staff: StaffUser, session: SessionDep) -> CheckOut:
-    check = await collection.check_pass(session, staff, body.token)
+    check = await collection.check_pass(session, staff, body.token, _position(body.position))
     return await _out(session, check)
 
 
 @router.post("/check/code", response_model=CheckOut)
 async def check_code(body: CodeCheckIn, staff: StaffUser, session: SessionDep) -> CheckOut:
-    check = await collection.check_code(session, staff, body.child_id, body.code)
+    check = await collection.check_code(
+        session, staff, body.child_id, body.code, _position(body.position)
+    )
     return await _out(session, check)
 
 

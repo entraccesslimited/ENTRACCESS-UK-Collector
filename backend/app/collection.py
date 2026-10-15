@@ -20,12 +20,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import passes
+from app import geofence, passes
 from app.config import get_settings
 from app.models import (
     AuditEvent,
@@ -301,6 +302,18 @@ def code_for(nursery: Nursery, auth: Authorisation, now: datetime) -> str:
     return passes.daily_code(auth.nursery_id, auth.id, auth.version, local_date(nursery, now))
 
 
+def fence_of(nursery: Nursery) -> geofence.Fence | None:
+    if (
+        nursery.geofence_latitude is None
+        or nursery.geofence_longitude is None
+        or nursery.geofence_radius_m is None
+    ):
+        return None
+    return geofence.Fence(
+        nursery.geofence_latitude, nursery.geofence_longitude, nursery.geofence_radius_m
+    )
+
+
 async def _record(
     session: AsyncSession,
     staff: User,
@@ -309,6 +322,8 @@ async def _record(
     result: CheckResult,
     child_id: uuid.UUID | None = None,
     auth: Authorisation | None = None,
+    position: geofence.Position | None = None,
+    distance: float | None = None,
 ) -> DoorCheck:
     check = DoorCheck(
         nursery_id=staff.nursery_id,
@@ -317,13 +332,56 @@ async def _record(
         result=result,
         child_id=child_id or (auth.child_id if auth else None),
         authorisation_id=auth.id if auth else None,
+        latitude=position.latitude if position else None,
+        longitude=position.longitude if position else None,
+        accuracy_m=position.accuracy_m if position else None,
+        distance_m=round(distance, 1) if distance is not None else None,
     )
     session.add(check)
     await session.flush()
     return check
 
 
-async def check_pass(session: AsyncSession, staff: User, token: str) -> DoorCheck:
+async def _fenced_out(
+    session: AsyncSession,
+    staff: User,
+    method: CheckMethod,
+    position: geofence.Position | None,
+    child_id: uuid.UUID | None = None,
+) -> tuple[DoorCheck | None, float | None]:
+    """Refuse and record a check from outside the nursery's geofence.
+
+    Decided before the pass or code is even looked at, so a phone off the
+    premises learns nothing about whether what it holds is valid.
+    """
+    nursery = await nursery_of(session, staff)
+    verdict = geofence.check(fence_of(nursery), position)
+    if verdict.allowed:
+        return None, verdict.distance_m
+    result = (
+        CheckResult.NO_LOCATION
+        if verdict.verdict is geofence.Verdict.UNKNOWN
+        else CheckResult.OUTSIDE_GEOFENCE
+    )
+    check = await _record(
+        session,
+        staff,
+        method=method,
+        result=result,
+        child_id=child_id,
+        position=position,
+        distance=verdict.distance_m,
+    )
+    return check, verdict.distance_m
+
+
+async def check_pass(
+    session: AsyncSession, staff: User, token: str, position: geofence.Position | None = None
+) -> DoorCheck:
+    refused, distance = await _fenced_out(session, staff, CheckMethod.PASS, position)
+    if refused is not None:
+        return refused
+    where: dict[str, Any] = {"position": position, "distance": distance}
     try:
         payload = passes.read_pass(token, nursery_id=staff.nursery_id)
     except passes.InvalidPass:
@@ -332,7 +390,7 @@ async def check_pass(session: AsyncSession, staff: User, token: str) -> DoorChec
             if not token.strip().startswith("CP1.")
             else (CheckResult.WRONG_NURSERY)
         )
-        return await _record(session, staff, method=CheckMethod.PASS, result=result)
+        return await _record(session, staff, method=CheckMethod.PASS, result=result, **where)
 
     auth = await session.scalar(
         select(Authorisation).where(
@@ -341,13 +399,15 @@ async def check_pass(session: AsyncSession, staff: User, token: str) -> DoorChec
         )
     )
     if auth is None:
-        return await _record(session, staff, method=CheckMethod.PASS, result=CheckResult.UNKNOWN)
+        return await _record(
+            session, staff, method=CheckMethod.PASS, result=CheckResult.UNKNOWN, **where
+        )
     if payload.version != auth.version:
         return await _record(
-            session, staff, method=CheckMethod.PASS, result=CheckResult.REISSUED, auth=auth
+            session, staff, method=CheckMethod.PASS, result=CheckResult.REISSUED, auth=auth, **where
         )
     result = status_of(auth, datetime.now(UTC))
-    return await _record(session, staff, method=CheckMethod.PASS, result=result, auth=auth)
+    return await _record(session, staff, method=CheckMethod.PASS, result=result, auth=auth, **where)
 
 
 async def _recent_wrong_codes(session: AsyncSession, child_id: uuid.UUID) -> int:
@@ -367,7 +427,11 @@ async def _recent_wrong_codes(session: AsyncSession, child_id: uuid.UUID) -> int
 
 
 async def check_code(
-    session: AsyncSession, staff: User, child_id: uuid.UUID, code: str
+    session: AsyncSession,
+    staff: User,
+    child_id: uuid.UUID,
+    code: str,
+    position: geofence.Position | None = None,
 ) -> DoorCheck:
     """Check a six-digit code against every current collector for one child.
 
@@ -377,9 +441,20 @@ async def check_code(
     wrong tries.
     """
     child = await child_in_nursery(session, staff, child_id)
+    refused, distance = await _fenced_out(
+        session, staff, CheckMethod.CODE, position, child_id=child.id
+    )
+    if refused is not None:
+        return refused
+    where: dict[str, Any] = {"position": position, "distance": distance}
     if await _recent_wrong_codes(session, child.id) >= get_settings().CODE_ATTEMPT_LIMIT:
         return await _record(
-            session, staff, method=CheckMethod.CODE, result=CheckResult.LOCKED, child_id=child.id
+            session,
+            staff,
+            method=CheckMethod.CODE,
+            result=CheckResult.LOCKED,
+            child_id=child.id,
+            **where,
         )
 
     nursery = await nursery_of(session, staff)
@@ -395,9 +470,15 @@ async def check_code(
                 method=CheckMethod.CODE,
                 result=status_of(auth, now),
                 auth=auth,
+                **where,
             )
     return await _record(
-        session, staff, method=CheckMethod.CODE, result=CheckResult.WRONG_CODE, child_id=child.id
+        session,
+        staff,
+        method=CheckMethod.CODE,
+        result=CheckResult.WRONG_CODE,
+        child_id=child.id,
+        **where,
     )
 
 

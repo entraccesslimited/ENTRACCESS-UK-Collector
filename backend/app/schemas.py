@@ -91,13 +91,38 @@ class PublicPassOut(BaseModel):
     token: str
 
 
+class PositionIn(BaseModel):
+    """Where the checking phone says it is, from the browser's Geolocation API."""
+
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy_m: float = Field(default=0, ge=0, le=1_000_000)
+
+
 class CodeCheckIn(BaseModel):
     child_id: uuid.UUID
     code: str = Field(min_length=6, max_length=12)
+    position: PositionIn | None = None
 
 
 class PassCheckIn(BaseModel):
     token: str = Field(min_length=3, max_length=400)
+    position: PositionIn | None = None
+
+
+class GeofenceIn(BaseModel):
+    latitude: float = Field(ge=-90, le=90, examples=[53.3811])
+    longitude: float = Field(ge=-180, le=180, examples=[-1.4701])
+    radius_m: int = Field(ge=50, le=5000, examples=[150])
+
+
+class GeofenceOut(BaseModel):
+    enabled: bool
+    latitude: float | None = None
+    longitude: float | None = None
+    radius_m: int | None = None
+    min_radius_m: int = 50
+    max_radius_m: int = 5000
 
 
 class CheckOut(BaseModel):
@@ -146,6 +171,7 @@ class DoorCheckOut(BaseModel):
     child_name: str | None
     collector_name: str | None
     staff_name: str
+    distance_m: float | None = None
 
 
 class TodayOut(BaseModel):

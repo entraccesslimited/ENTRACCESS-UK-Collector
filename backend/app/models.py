@@ -21,6 +21,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -98,6 +99,9 @@ class CheckResult(enum.StrEnum):
     ALREADY_USED = "already_used"
     WRONG_CODE = "wrong_code"
     LOCKED = "locked"
+    # The nursery has a geofence and the phone was outside it, or gave no position.
+    OUTSIDE_GEOFENCE = "outside_geofence"
+    NO_LOCATION = "no_location"
 
 
 class HandoverOutcome(enum.StrEnum):
@@ -122,6 +126,11 @@ class Nursery(Base):
     name: Mapped[str] = mapped_column(String(200))
     slug: Mapped[str] = mapped_column(String(80), unique=True)
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/London")
+    # Optional geofence: door checks only from within this circle. All three
+    # are set together, or none.
+    geofence_latitude: Mapped[float | None] = mapped_column(Float)
+    geofence_longitude: Mapped[float | None] = mapped_column(Float)
+    geofence_radius_m: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
@@ -223,6 +232,12 @@ class DoorCheck(Base):
     child_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("children.id"))
     authorisation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("authorisations.id"))
     checked_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # Where the checking phone said it was, when it said. Kept on every check,
+    # so a refused one shows how far away it was.
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    accuracy_m: Mapped[float | None] = mapped_column(Float)
+    distance_m: Mapped[float | None] = mapped_column(Float)
 
     checked_by: Mapped[User] = relationship()
     child: Mapped[Child | None] = relationship()

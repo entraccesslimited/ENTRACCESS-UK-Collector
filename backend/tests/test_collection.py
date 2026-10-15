@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 from zoneinfo import ZoneInfo
 
 from httpx import AsyncClient
@@ -434,3 +435,46 @@ class TestDeploymentSettings:
             Settings(ENVIRONMENT="staging")
         ok = Settings(ENVIRONMENT="staging", SECRET_KEY="s" * 40, PASS_SIGNING_KEY="p" * 40)
         assert ok.secure_cookies is True
+
+
+class TestGeofence:
+    SITE: ClassVar[dict[str, float]] = {"latitude": 53.3811, "longitude": -1.4701}
+
+    async def _fence(self, as_admin: AsyncClient) -> None:
+        r = await as_admin.put("/api/admin/geofence", json={**self.SITE, "radius_m": 150})
+        assert r.status_code == 200 and r.json()["enabled"] is True
+
+    async def test_inside_passes_outside_and_unknown_are_refused(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient, as_admin: AsyncClient
+    ) -> None:
+        await self._fence(as_admin)
+        auth = await add_regular(as_parent, world.child.id)
+        token = (await pass_of(as_parent, auth["id"]))["token"]
+        inside = {**self.SITE, "accuracy_m": 20}
+        far = {"latitude": 53.48, "longitude": -2.24, "accuracy_m": 20}
+        ok = (
+            await as_staff.post("/api/door/check/pass", json={"token": token, "position": inside})
+        ).json()
+        assert ok["result"] == "valid"
+        out = (
+            await as_staff.post("/api/door/check/pass", json={"token": token, "position": far})
+        ).json()
+        assert out["result"] == "outside_geofence" and out["can_release"] is False
+        none = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        assert none["result"] == "no_location"
+        exc = (await as_admin.get("/api/admin/checks")).json()
+        assert any(e["distance_m"] and e["distance_m"] > 1000 for e in exc)
+
+    async def test_clearing_the_fence_needs_no_location(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient, as_admin: AsyncClient
+    ) -> None:
+        await self._fence(as_admin)
+        assert (await as_admin.delete("/api/admin/geofence")).json()["enabled"] is False
+        auth = await add_regular(as_parent, world.child.id)
+        token = (await pass_of(as_parent, auth["id"]))["token"]
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        assert check["result"] == "valid"
+
+    async def test_a_silly_radius_is_refused(self, as_admin: AsyncClient) -> None:
+        r = await as_admin.put("/api/admin/geofence", json={**self.SITE, "radius_m": 10})
+        assert r.status_code == 422

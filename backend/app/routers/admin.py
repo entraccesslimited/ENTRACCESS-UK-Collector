@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app import collection
+from app import collection, geofence
 from app.deps import AdminUser, SessionDep
 from app.models import (
     Authorisation,
@@ -30,6 +30,8 @@ from app.schemas import (
     ChildIn,
     ChildOut,
     DoorCheckOut,
+    GeofenceIn,
+    GeofenceOut,
     HandoverOut,
     LinkIn,
     LinkOut,
@@ -201,9 +203,57 @@ async def checks(
                 child_name=child.full_name if child else None,
                 collector_name=auth.collector_name if auth else None,
                 staff_name=staff.full_name if staff else "Unknown",
+                distance_m=check.distance_m,
             )
         )
     return out
+
+
+def _fence_out(fence: geofence.Fence | None) -> GeofenceOut:
+    if fence is None:
+        return GeofenceOut(enabled=False)
+    return GeofenceOut(
+        enabled=True,
+        latitude=fence.latitude,
+        longitude=fence.longitude,
+        radius_m=fence.radius_m,
+    )
+
+
+@router.get("/geofence", response_model=GeofenceOut)
+async def get_geofence(admin: AdminUser, session: SessionDep) -> GeofenceOut:
+    return _fence_out(collection.fence_of(await collection.nursery_of(session, admin)))
+
+
+@router.put("/geofence", response_model=GeofenceOut)
+async def set_geofence(body: GeofenceIn, admin: AdminUser, session: SessionDep) -> GeofenceOut:
+    """Only accept door checks from phones within this circle."""
+    if not geofence.valid_coordinates(body.latitude, body.longitude):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Those are not real coordinates.")
+    nursery = await collection.nursery_of(session, admin)
+    nursery.geofence_latitude = body.latitude
+    nursery.geofence_longitude = body.longitude
+    nursery.geofence_radius_m = body.radius_m
+    await collection.audit(
+        session,
+        nursery_id=admin.nursery_id,
+        actor=admin,
+        action="geofence.set",
+        detail=f"{body.latitude:.5f},{body.longitude:.5f} r={body.radius_m}m",
+    )
+    return _fence_out(collection.fence_of(nursery))
+
+
+@router.delete("/geofence", response_model=GeofenceOut)
+async def clear_geofence(admin: AdminUser, session: SessionDep) -> GeofenceOut:
+    nursery = await collection.nursery_of(session, admin)
+    nursery.geofence_latitude = None
+    nursery.geofence_longitude = None
+    nursery.geofence_radius_m = None
+    await collection.audit(
+        session, nursery_id=admin.nursery_id, actor=admin, action="geofence.cleared"
+    )
+    return _fence_out(None)
 
 
 @router.get("/children", response_model=list[ChildOut])
