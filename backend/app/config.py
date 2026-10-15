@@ -22,7 +22,7 @@ DEV_PASS_KEY = "dev-pass-signing-key-change-me-dev-pass"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    ENVIRONMENT: Literal["development", "test", "production"] = "development"
+    ENVIRONMENT: Literal["development", "test", "staging", "production"] = "development"
     APP_NAME: str = "ENTRACCESS UK Collector"
     APP_BASE_URL: str = "http://localhost:8090"
 
@@ -51,16 +51,18 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _no_dev_secrets_in_production(self) -> Settings:
-        if self.ENVIRONMENT == "production":
+        if self.ENVIRONMENT in {"staging", "production"}:
             if self.SECRET_KEY == DEV_SECRET or len(self.SECRET_KEY) < 32:
-                raise ValueError("Set a SECRET_KEY of at least 32 characters in production.")
+                raise ValueError("Set a SECRET_KEY of at least 32 characters outside development.")
             if self.PASS_SIGNING_KEY == DEV_PASS_KEY or len(self.PASS_SIGNING_KEY) < 32:
-                raise ValueError("Set a PASS_SIGNING_KEY of at least 32 characters in production.")
+                raise ValueError(
+                    "Set a PASS_SIGNING_KEY of at least 32 characters outside development."
+                )
         return self
 
     @property
     def secure_cookies(self) -> bool:
-        return self.ENVIRONMENT == "production"
+        return self.ENVIRONMENT in {"staging", "production"}
 
 
 @lru_cache

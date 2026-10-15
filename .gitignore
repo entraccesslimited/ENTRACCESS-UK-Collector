@@ -9,3 +9,5 @@ node_modules/
 dist/
 *.egg-info/
 .DS_Store
+.env.*
+!.env.example

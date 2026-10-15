@@ -72,6 +72,20 @@ Open <http://localhost:8090> and sign in with any demo account (password
 
 Emails sent in development land in Mailpit at <http://localhost:8026>.
 
+### Share it over Tailscale (not only localhost)
+
+```bash
+TS_SOCKET=~/.tailscale/ts.sock scripts/tailnet.sh   # TS_SOCKET only if tailscaled runs with a custom socket
+docker compose --env-file .env.tailnet -f docker-compose.yml -f docker-compose.tailnet.yml exec api python -m app.seed
+```
+
+Runs a separate `staging` stack (real random keys in the gitignored
+`.env.tailnet`, Secure cookies) and publishes it with Tailscale Funnel at
+`https://<machine>.<tailnet>.ts.net:10000`. Shared pass links use that address,
+so a collector can open theirs on their own phone. `scripts/tailnet.sh stop`
+takes it down. It is reachable only while this machine is on: for demos and
+pilots, never real children's data.
+
 ### Without Docker
 
 ```bash

@@ -421,3 +421,16 @@ class TestSigningIn:
 
     async def test_signed_out_requests_are_refused(self, anonymous: AsyncClient) -> None:
         assert (await anonymous.get("/api/parent/children")).status_code == 401
+
+
+class TestDeploymentSettings:
+    def test_staging_refuses_the_development_keys(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        from app.config import Settings
+
+        with pytest.raises(ValidationError):
+            Settings(ENVIRONMENT="staging")
+        ok = Settings(ENVIRONMENT="staging", SECRET_KEY="s" * 40, PASS_SIGNING_KEY="p" * 40)
+        assert ok.secure_cookies is True

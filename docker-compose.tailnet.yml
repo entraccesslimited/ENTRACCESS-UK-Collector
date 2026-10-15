@@ -1,0 +1,30 @@
+# Share a running copy over Tailscale Funnel, so it is reachable at a public
+# https address and not only on localhost. Start it with scripts/tailnet.sh,
+# which writes .env.tailnet (random keys, gitignored) on first run.
+#
+# "staging": real keys are required, cookies are Secure, the API docs are on,
+# and demo data may be loaded. Own project name, so it never shares
+# containers or volumes with the development stack.
+name: entraccess-collector-tailnet
+
+services:
+  mailpit:
+    ports: !override
+      - "127.0.0.1:${TAILNET_MAIL_PORT:-8126}:8025"
+
+  api:
+    build:
+      context: ./backend
+      target: prod
+    volumes: !reset []
+    environment:
+      ENVIRONMENT: staging
+      APP_BASE_URL: ${TAILNET_URL:?run scripts/tailnet.sh}
+      SECRET_KEY: ${SECRET_KEY:?run scripts/tailnet.sh}
+      PASS_SIGNING_KEY: ${PASS_SIGNING_KEY:?run scripts/tailnet.sh}
+    restart: unless-stopped
+
+  web:
+    ports: !override
+      - "127.0.0.1:${TAILNET_WEB_PORT:-8190}:8080"
+    restart: unless-stopped
