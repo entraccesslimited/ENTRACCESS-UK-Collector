@@ -1,0 +1,459 @@
+"""Authorising collectors, checking them at the door, and recording handovers.
+
+The rules live here rather than in the routes, because they are the product:
+
+* Only a parent linked to a child may authorise someone to collect that child.
+* A one-off collector is good for one collection inside a window of at most a
+  week. Once the child is released to them, the pass and code stop working.
+* A regular collector is good every day inside their window, with a code that
+  changes each day.
+* Revoking is instant and final. Reissuing gives a new pass and code and stops
+  the old ones at once.
+* Every check at the door is recorded, whatever its answer. A release or a
+  refusal can only follow a check that came back valid, and is re-checked at
+  the moment it is made, so a collector revoked while standing at the door is
+  not released.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import passes
+from app.config import get_settings
+from app.models import (
+    AuditEvent,
+    Authorisation,
+    CheckMethod,
+    CheckResult,
+    Child,
+    CollectorKind,
+    DoorCheck,
+    Handover,
+    HandoverOutcome,
+    Nursery,
+    ParentLink,
+    User,
+)
+from app.notify import notify_parents
+
+MAX_ACTIVE_PER_CHILD = 12
+MAX_ONE_OFF_DAYS = 7
+DECISION_WINDOW = timedelta(minutes=10)
+
+
+class CollectionError(ValueError):
+    """A request the rules refuse. The message is safe to show."""
+
+    def __init__(self, message: str, *, status: int = 400) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+def _aware(moment: datetime) -> datetime:
+    # SQLite hands back naive datetimes; everything here is stored in UTC.
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+
+def zone(nursery: Nursery) -> ZoneInfo:
+    return ZoneInfo(nursery.timezone or get_settings().DEFAULT_TIMEZONE)
+
+
+def local_date(nursery: Nursery, moment: datetime) -> date:
+    return _aware(moment).astimezone(zone(nursery)).date()
+
+
+def day_bounds(nursery: Nursery, day: date) -> tuple[datetime, datetime]:
+    tz = zone(nursery)
+    start = datetime.combine(day, time.min, tzinfo=tz)
+    end = datetime.combine(day, time(23, 59, 59), tzinfo=tz)
+    return start.astimezone(UTC), end.astimezone(UTC)
+
+
+def status_of(auth: Authorisation, now: datetime) -> CheckResult:
+    """Whether an authorisation can be used right now, and if not, why not."""
+    if auth.revoked_at is not None:
+        return CheckResult.REVOKED
+    if auth.used_at is not None:
+        return CheckResult.ALREADY_USED
+    if now < _aware(auth.valid_from):
+        return CheckResult.NOT_YET_VALID
+    if auth.valid_until is not None and now > _aware(auth.valid_until):
+        return CheckResult.EXPIRED
+    return CheckResult.VALID
+
+
+async def audit(
+    session: AsyncSession,
+    *,
+    nursery_id: uuid.UUID,
+    actor: User | None,
+    action: str,
+    subject_id: uuid.UUID | None = None,
+    detail: str | None = None,
+) -> None:
+    session.add(
+        AuditEvent(
+            nursery_id=nursery_id,
+            actor_id=actor.id if actor else None,
+            action=action,
+            subject_id=subject_id,
+            detail=detail,
+        )
+    )
+
+
+async def nursery_of(session: AsyncSession, user: User) -> Nursery:
+    nursery = await session.get(Nursery, user.nursery_id)
+    assert nursery is not None
+    return nursery
+
+
+async def child_for_parent(session: AsyncSession, parent: User, child_id: uuid.UUID) -> Child:
+    child = await session.scalar(
+        select(Child)
+        .join(ParentLink, ParentLink.child_id == Child.id)
+        .where(
+            ParentLink.parent_id == parent.id,
+            Child.id == child_id,
+            Child.nursery_id == parent.nursery_id,
+        )
+    )
+    if child is None:
+        raise CollectionError("No such child on your account.", status=404)
+    return child
+
+
+async def child_in_nursery(session: AsyncSession, user: User, child_id: uuid.UUID) -> Child:
+    child = await session.scalar(
+        select(Child).where(Child.id == child_id, Child.nursery_id == user.nursery_id)
+    )
+    if child is None:
+        raise CollectionError("No such child at this nursery.", status=404)
+    return child
+
+
+@dataclass(frozen=True, slots=True)
+class NewAuthorisation:
+    collector_name: str
+    collector_relationship: str
+    collector_phone: str
+    kind: CollectorKind
+    note_for_staff: str | None = None
+    # One-off: the day of the collection, and optionally a narrower window.
+    on_date: date | None = None
+    from_time: time | None = None
+    until_time: time | None = None
+    # Regular: optional first and last day.
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+def _window(
+    nursery: Nursery, data: NewAuthorisation, now: datetime
+) -> tuple[datetime, datetime | None]:
+    tz = zone(nursery)
+    today = local_date(nursery, now)
+    if data.kind is CollectorKind.ONE_OFF:
+        if data.on_date is None:
+            raise CollectionError("Choose the day of the collection.")
+        if data.on_date < today:
+            raise CollectionError("That day has already passed.")
+        if data.on_date > today + timedelta(days=MAX_ONE_OFF_DAYS):
+            raise CollectionError(
+                f"A one-off collection can be set up to {MAX_ONE_OFF_DAYS} days ahead."
+            )
+        opens = datetime.combine(data.on_date, data.from_time or time.min, tzinfo=tz)
+        closes = datetime.combine(data.on_date, data.until_time or time(23, 59, 59), tzinfo=tz)
+        if closes <= opens:
+            raise CollectionError("The end of the window must be after its start.")
+        return opens.astimezone(UTC), closes.astimezone(UTC)
+
+    first = data.start_date or today
+    if first < today:
+        raise CollectionError("The first day cannot be in the past.")
+    start = datetime.combine(first, time.min, tzinfo=tz).astimezone(UTC)
+    if first == today:
+        start = min(start, now)
+    end: datetime | None = None
+    if data.end_date is not None:
+        if data.end_date < first:
+            raise CollectionError("The last day must be on or after the first day.")
+        end = datetime.combine(data.end_date, time(23, 59, 59), tzinfo=tz).astimezone(UTC)
+    return start, end
+
+
+async def authorise(
+    session: AsyncSession, parent: User, child_id: uuid.UUID, data: NewAuthorisation
+) -> Authorisation:
+    child = await child_for_parent(session, parent, child_id)
+    nursery = await nursery_of(session, parent)
+    now = datetime.now(UTC)
+
+    name = data.collector_name.strip()
+    phone = data.collector_phone.strip()
+    if len(name) < 2:
+        raise CollectionError("Give the collector's full name.")
+    if len("".join(ch for ch in phone if ch.isdigit())) < 7:
+        raise CollectionError("Give a phone number staff can ring.")
+
+    active = await session.scalar(
+        select(func.count())
+        .select_from(Authorisation)
+        .where(
+            Authorisation.child_id == child.id,
+            Authorisation.revoked_at.is_(None),
+            Authorisation.used_at.is_(None),
+        )
+    )
+    if (active or 0) >= MAX_ACTIVE_PER_CHILD:
+        raise CollectionError(
+            f"{child.full_name} already has {MAX_ACTIVE_PER_CHILD} active collectors. "
+            "Remove one before adding another."
+        )
+
+    valid_from, valid_until = _window(nursery, data, now)
+    auth = Authorisation(
+        nursery_id=parent.nursery_id,
+        child_id=child.id,
+        authorised_by_id=parent.id,
+        collector_name=name,
+        collector_relationship=data.collector_relationship.strip() or "Other",
+        collector_phone=phone,
+        note_for_staff=(data.note_for_staff or "").strip() or None,
+        kind=data.kind,
+        valid_from=valid_from,
+        valid_until=valid_until,
+    )
+    session.add(auth)
+    await session.flush()
+    await audit(
+        session,
+        nursery_id=parent.nursery_id,
+        actor=parent,
+        action="authorisation.created",
+        subject_id=auth.id,
+        detail=f"{data.kind.value} collector {name} for {child.full_name}",
+    )
+    return auth
+
+
+async def authorisation_for_parent(
+    session: AsyncSession, parent: User, authorisation_id: uuid.UUID
+) -> Authorisation:
+    auth = await session.scalar(
+        select(Authorisation)
+        .join(ParentLink, ParentLink.child_id == Authorisation.child_id)
+        .where(
+            Authorisation.id == authorisation_id,
+            Authorisation.nursery_id == parent.nursery_id,
+            ParentLink.parent_id == parent.id,
+        )
+    )
+    if auth is None:
+        raise CollectionError("No such collector on your account.", status=404)
+    return auth
+
+
+async def revoke(session: AsyncSession, actor: User, auth: Authorisation) -> Authorisation:
+    if auth.revoked_at is None:
+        auth.revoked_at = datetime.now(UTC)
+        auth.revoked_by_id = actor.id
+        await audit(
+            session,
+            nursery_id=auth.nursery_id,
+            actor=actor,
+            action="authorisation.revoked",
+            subject_id=auth.id,
+            detail=auth.collector_name,
+        )
+    return auth
+
+
+async def reissue(session: AsyncSession, actor: User, auth: Authorisation) -> Authorisation:
+    if auth.revoked_at is not None:
+        raise CollectionError("This collector has been removed. Add them again instead.")
+    if auth.used_at is not None:
+        raise CollectionError("This one-off collection has happened. Add a new one instead.")
+    auth.version += 1
+    await audit(
+        session,
+        nursery_id=auth.nursery_id,
+        actor=actor,
+        action="authorisation.reissued",
+        subject_id=auth.id,
+        detail=f"version {auth.version}",
+    )
+    return auth
+
+
+def pass_for(auth: Authorisation) -> str:
+    return passes.issue_pass(auth.nursery_id, auth.id, auth.version)
+
+
+def code_for(nursery: Nursery, auth: Authorisation, now: datetime) -> str:
+    return passes.daily_code(auth.nursery_id, auth.id, auth.version, local_date(nursery, now))
+
+
+async def _record(
+    session: AsyncSession,
+    staff: User,
+    *,
+    method: CheckMethod,
+    result: CheckResult,
+    child_id: uuid.UUID | None = None,
+    auth: Authorisation | None = None,
+) -> DoorCheck:
+    check = DoorCheck(
+        nursery_id=staff.nursery_id,
+        checked_by_id=staff.id,
+        method=method,
+        result=result,
+        child_id=child_id or (auth.child_id if auth else None),
+        authorisation_id=auth.id if auth else None,
+    )
+    session.add(check)
+    await session.flush()
+    return check
+
+
+async def check_pass(session: AsyncSession, staff: User, token: str) -> DoorCheck:
+    try:
+        payload = passes.read_pass(token, nursery_id=staff.nursery_id)
+    except passes.InvalidPass:
+        result = (
+            CheckResult.UNREADABLE
+            if not token.strip().startswith("CP1.")
+            else (CheckResult.WRONG_NURSERY)
+        )
+        return await _record(session, staff, method=CheckMethod.PASS, result=result)
+
+    auth = await session.scalar(
+        select(Authorisation).where(
+            Authorisation.id == payload.authorisation_id,
+            Authorisation.nursery_id == staff.nursery_id,
+        )
+    )
+    if auth is None:
+        return await _record(session, staff, method=CheckMethod.PASS, result=CheckResult.UNKNOWN)
+    if payload.version != auth.version:
+        return await _record(
+            session, staff, method=CheckMethod.PASS, result=CheckResult.REISSUED, auth=auth
+        )
+    result = status_of(auth, datetime.now(UTC))
+    return await _record(session, staff, method=CheckMethod.PASS, result=result, auth=auth)
+
+
+async def _recent_wrong_codes(session: AsyncSession, child_id: uuid.UUID) -> int:
+    settings = get_settings()
+    since = datetime.now(UTC) - timedelta(minutes=settings.CODE_ATTEMPT_WINDOW_MINUTES)
+    count = await session.scalar(
+        select(func.count())
+        .select_from(DoorCheck)
+        .where(
+            DoorCheck.child_id == child_id,
+            DoorCheck.method == CheckMethod.CODE,
+            DoorCheck.result.in_([CheckResult.WRONG_CODE, CheckResult.LOCKED]),
+            DoorCheck.checked_at >= since,
+        )
+    )
+    return int(count or 0)
+
+
+async def check_code(
+    session: AsyncSession, staff: User, child_id: uuid.UUID, code: str
+) -> DoorCheck:
+    """Check a six-digit code against every current collector for one child.
+
+    Codes are tried against one child, never against the whole nursery: six
+    digits across a hundred collectors would be guessable, and against one
+    child's handful it is not — especially with entry paused after a few
+    wrong tries.
+    """
+    child = await child_in_nursery(session, staff, child_id)
+    if await _recent_wrong_codes(session, child.id) >= get_settings().CODE_ATTEMPT_LIMIT:
+        return await _record(
+            session, staff, method=CheckMethod.CODE, result=CheckResult.LOCKED, child_id=child.id
+        )
+
+    nursery = await nursery_of(session, staff)
+    now = datetime.now(UTC)
+    candidates = (
+        await session.scalars(select(Authorisation).where(Authorisation.child_id == child.id))
+    ).all()
+    for auth in candidates:
+        if passes.codes_match(code, code_for(nursery, auth, now)):
+            return await _record(
+                session,
+                staff,
+                method=CheckMethod.CODE,
+                result=status_of(auth, now),
+                auth=auth,
+            )
+    return await _record(
+        session, staff, method=CheckMethod.CODE, result=CheckResult.WRONG_CODE, child_id=child.id
+    )
+
+
+async def decide(
+    session: AsyncSession,
+    staff: User,
+    check_id: uuid.UUID,
+    *,
+    release: bool,
+    reason: str | None,
+) -> Handover:
+    check = await session.scalar(
+        select(DoorCheck).where(DoorCheck.id == check_id, DoorCheck.nursery_id == staff.nursery_id)
+    )
+    if check is None:
+        raise CollectionError("No such check.", status=404)
+    if check.result is not CheckResult.VALID or check.authorisation_id is None:
+        raise CollectionError("Only a valid check can lead to a handover.", status=409)
+    already = await session.scalar(select(Handover).where(Handover.door_check_id == check.id))
+    if already is not None:
+        raise CollectionError("This check has already been decided.", status=409)
+    now = datetime.now(UTC)
+    if now - _aware(check.checked_at) > DECISION_WINDOW:
+        raise CollectionError("This check is too old. Check the collector again.", status=409)
+
+    auth = await session.get(Authorisation, check.authorisation_id)
+    child = await session.get(Child, check.child_id) if check.child_id else None
+    assert auth is not None and child is not None
+    parent = await session.get(User, auth.authorised_by_id)
+
+    if release and status_of(auth, now) is not CheckResult.VALID:
+        raise CollectionError(
+            "This collector stopped being authorised after the check. Do not release the child.",
+            status=409,
+        )
+    if not release and not (reason or "").strip():
+        raise CollectionError("Say why the child was not released.")
+
+    handover = Handover(
+        nursery_id=staff.nursery_id,
+        door_check_id=check.id,
+        child_id=child.id,
+        authorisation_id=auth.id,
+        outcome=HandoverOutcome.RELEASED if release else HandoverOutcome.REFUSED,
+        refusal_reason=None if release else (reason or "").strip(),
+        child_name=child.full_name,
+        collector_name=auth.collector_name,
+        collector_relationship=auth.collector_relationship,
+        authorised_by_name=parent.full_name if parent else "Unknown",
+        staff_id=staff.id,
+        staff_name=staff.full_name,
+        occurred_at=now,
+    )
+    session.add(handover)
+    if release and auth.kind is CollectorKind.ONE_OFF:
+        auth.used_at = now
+    await session.flush()
+    await notify_parents(session, handover)
+    return handover

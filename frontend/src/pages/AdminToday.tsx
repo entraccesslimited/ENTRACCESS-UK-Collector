@@ -1,0 +1,54 @@
+import { Alert, PageTitle, Stat } from '@/components/ui'
+import { STATUS_LABEL, when } from '@/lib/format'
+import { useLoad } from '@/lib/useLoad'
+import type { DoorCheck, Today } from '@/lib/types'
+
+export function AdminToday() {
+  const today = useLoad<Today>('/admin/today')
+  const exceptions = useLoad<DoorCheck[]>('/admin/checks?exceptions_only=true')
+  return (
+    <>
+      <PageTitle title="Today" sub="Handovers and exceptions at the door, in the nursery’s time." />
+      {today.error && <Alert>{today.error}</Alert>}
+      {today.data && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Stat label="Released" value={today.data.released} tone="green" />
+          <Stat label="Refused" value={today.data.refused} tone="red" />
+          <Stat label="Exceptions at the door" value={today.data.exceptions} tone="amber" />
+          <Stat label="Active collectors" value={today.data.active_collectors} />
+        </div>
+      )}
+      <section className="card mt-6 overflow-x-auto">
+        <h2 className="mb-3 font-semibold">Exceptions in the last 30 days</h2>
+        <p className="mb-3 text-sm text-slate-600">
+          Every check that did not come back valid: removed or replaced passes, wrong codes, passes from elsewhere.
+        </p>
+        {exceptions.data?.length === 0 && <p className="text-sm text-slate-500">None. Every check came back valid.</p>}
+        {exceptions.data && exceptions.data.length > 0 && (
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Result</th>
+                <th>Child</th>
+                <th>Collector</th>
+                <th>Checked by</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {exceptions.data.map((c) => (
+                <tr key={c.id}>
+                  <td>{when(c.checked_at)}</td>
+                  <td className="font-medium text-red-700">{STATUS_LABEL[c.result]}</td>
+                  <td>{c.child_name ?? '—'}</td>
+                  <td>{c.collector_name ?? '—'}</td>
+                  <td>{c.staff_name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+    </>
+  )
+}

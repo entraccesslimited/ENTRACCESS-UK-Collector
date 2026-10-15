@@ -1,0 +1,50 @@
+# Local development: Postgres, the API and the web app.
+#   docker compose up --build
+#   docker compose exec api python -m app.seed     # demo nursery and logins
+# Then open http://localhost:8090
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: collector
+      POSTGRES_PASSWORD: collector
+      POSTGRES_DB: collector
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U collector"]
+      interval: 2s
+      retries: 30
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:8026:8025"
+
+  api:
+    build:
+      context: ./backend
+      target: dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://collector:collector@postgres:5432/collector
+      APP_BASE_URL: http://localhost:8090
+      EMAIL_ENABLED: "true"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    volumes:
+      - ./backend/app:/srv/app/app
+      - ./backend/alembic:/srv/app/alembic
+
+  web:
+    build: ./frontend
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8090:8080"
+
+volumes:
+  postgres_data:
