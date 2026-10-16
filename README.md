@@ -18,7 +18,7 @@ does not replace registers, learning journals or staff judgement.
 - Remove a collector instantly, or issue a new pass and code (the old ones stop at once).
 - See every collection of their child, and every refusal.
 
-**Door staff**
+**Room leaders**
 - Scan the collector's pass with the phone camera (or a scanner), or enter
   their code against the child.
 - See who the collector is, who authorised them and any note from the parent,
@@ -67,7 +67,7 @@ Open <http://localhost:8090> and sign in with any demo account (password
 | Role    | Email                     |
 | ------- | ------------------------- |
 | Manager | admin@demo.example.com    |
-| Staff   | staff@demo.example.com    |
+| Room leader | staff@demo.example.com |
 | Parent  | parent@demo.example.com   |
 
 Emails sent in development land in Mailpit at <http://localhost:8026>.

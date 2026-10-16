@@ -60,8 +60,9 @@ async def seed() -> None:
                 )
         await session.commit()
     print("Demo nursery loaded. Sign in with any of these, password", DEMO_PASSWORD)
+    labels = {Role.ADMIN: "manager", Role.STAFF: "room leader", Role.PARENT: "parent"}
     for email, _name, role in PEOPLE:
-        print(f"  {role.value:7} {email}")
+        print(f"  {labels[role]:12} {email}")
 
 
 if __name__ == "__main__":

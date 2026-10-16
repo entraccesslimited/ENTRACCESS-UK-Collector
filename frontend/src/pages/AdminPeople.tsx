@@ -6,7 +6,7 @@ import { useSession } from '@/lib/session'
 import { useLoad } from '@/lib/useLoad'
 import type { Person, Role } from '@/lib/types'
 
-const ROLE_LABEL: Record<Role, string> = { admin: 'Manager', staff: 'Staff', parent: 'Parent' }
+const ROLE_LABEL: Record<Role, string> = { admin: 'Manager', staff: 'Room leader', parent: 'Parent' }
 
 export function AdminPeople() {
   const { me } = useSession()
@@ -42,7 +42,7 @@ export function AdminPeople() {
 
   return (
     <>
-      <PageTitle title="People" sub="Managers, door staff and parents. Parents are linked to their children on the Children page." />
+      <PageTitle title="People" sub="Managers, room leaders and parents. Parents are linked to their children on the Children page." />
       {error && <Alert>{error}</Alert>}
       {message && <Alert tone="ok">{message}</Alert>}
       <form onSubmit={add} className="card my-4 grid gap-3 sm:grid-cols-2">
@@ -62,7 +62,7 @@ export function AdminPeople() {
           <span className="label">Role</span>
           <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
             <option value="parent">Parent</option>
-            <option value="staff">Door staff</option>
+            <option value="staff">Room leader</option>
             <option value="admin">Manager</option>
           </select>
         </label>

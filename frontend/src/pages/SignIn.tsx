@@ -50,7 +50,7 @@ export function SignIn() {
         <button className="btn btn-primary w-full" disabled={busy || !email || !password}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <p className="text-xs text-slate-500">Parents, nursery staff and managers all sign in here.</p>
+        <p className="text-xs text-slate-500">Parents, room leaders and managers all sign in here.</p>
       </form>
     </div>
   )
