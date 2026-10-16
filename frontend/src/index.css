@@ -8,6 +8,9 @@
   --color-brand-700: #1d4ed8;
   --color-ink: #0f172a;
   --color-midnight: #0b1220;
+  --color-paper: #ffffff;
+  --color-surface: #ffffff;
+  --color-mist: #f5f8fe;
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -32,13 +35,17 @@ td { @apply px-3 py-2 text-sm; }
 .site .btn { @apply rounded-full; }
 .site .btn-primary { box-shadow: 0 8px 20px -10px rgb(37 99 235 / 0.7); }
 .site .card { @apply rounded-2xl transition hover:-translate-y-0.5 hover:border-brand-500/40; }
-.site .input { @apply rounded-xl; }
+.site .input { @apply rounded-xl; background: var(--color-surface); color: var(--color-ink); }
+.site .card { background: var(--color-surface); }
+.site .btn-secondary { background: var(--color-surface); }
 .hero-grid {
+  --hero-ground: #eef4ff;
+  --hero-line: rgb(37 99 235 / 0.07);
   background:
     radial-gradient(60rem 30rem at 85% -10%, rgb(96 165 250 / 0.22), transparent 60%),
-    linear-gradient(rgb(37 99 235 / 0.07) 1px, transparent 1px) 0 0 / 44px 44px,
-    linear-gradient(90deg, rgb(37 99 235 / 0.07) 1px, transparent 1px) 0 0 / 44px 44px,
-    #eef4ff;
+    linear-gradient(var(--hero-line) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, var(--hero-line) 1px, transparent 1px) 0 0 / 44px 44px,
+    var(--hero-ground);
 }
 .blue-panel {
   background:
@@ -50,4 +57,34 @@ td { @apply px-3 py-2 text-sm; }
   content: ""; width: 20px; height: 22px; margin-top: 4px;
   border: 3.5px solid var(--color-brand-600); border-bottom: 0; border-radius: 10px 10px 0 0;
 }
+
+/* Dark theme for the website, set on <html> by public/theme.js and the
+   toggle. Done by re-pointing the palette inside .site rather than with dark:
+   classes on every element, so the markup stays as it is; the portals have no
+   .site and stay light. White text on the blue panel, the footer and buttons
+   is unaffected, because only the surface tokens and the slates move. */
+[data-theme="dark"] .site {
+  color-scheme: dark;
+  --color-paper: #0b1220;
+  --color-surface: #131d36;
+  --color-mist: #0f1830;
+  --color-ink: #e8eefc;
+  --color-slate-50: #0f1830;
+  --color-slate-100: #16213d;
+  --color-slate-200: #1f2b48;
+  --color-slate-300: #2b3b61;
+  --color-slate-400: #7d8db0;
+  --color-slate-500: #8d9cbd;
+  --color-slate-600: #a9b8d6;
+  --color-slate-700: #c3cfe6;
+  --color-slate-800: #dbe3f3;
+  --color-slate-900: #e8eefc;
+  --color-brand-50: #15244a;
+  --color-brand-700: #93c5fd;
+}
+[data-theme="dark"] .site .hero-grid {
+  --hero-ground: #0e1730;
+  --hero-line: rgb(96 165 250 / 0.07);
+}
+[data-theme="dark"] .site .btn-primary { box-shadow: 0 8px 24px -12px rgb(59 130 246 / 0.8); }
 }

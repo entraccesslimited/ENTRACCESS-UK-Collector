@@ -79,19 +79,19 @@ export function Website() {
               <a href="#contact" className="btn btn-primary px-6 py-3 text-base">
                 Book a demo
               </a>
-              <a href="#pricing" className="btn btn-secondary border-slate-300 px-6 py-3 text-base hover:border-brand-500 hover:bg-white hover:text-brand-700">
+              <a href="#pricing" className="btn btn-secondary border-slate-300 px-6 py-3 text-base hover:border-brand-500 hover:bg-surface hover:text-brand-700">
                 See pricing
               </a>
             </div>
           </div>
           <div className="rounded-3xl bg-[#111a2e] p-6 text-white shadow-[0_30px_70px_-28px_rgb(29_78_216/0.55)] ring-1 ring-brand-500/25">
-            <p className="text-sm text-slate-300">4.15pm. A parent rings: “My mum’s picking up today. She’s not on the list.”</p>
+            <p className="text-sm text-[#cbd5e1]">4.15pm. A parent rings: “My mum’s picking up today. She’s not on the list.”</p>
             <ol className="mt-4 space-y-3 text-sm">
               <li className="rounded-xl border border-brand-500/30 bg-brand-500/15 p-3">✓ Mum is authorised from the parent’s phone, for today only</li>
               <li className="rounded-xl border border-brand-500/30 bg-brand-500/15 p-3">✓ She shows her pass at the door; the room leader checks her ID</li>
               <li className="rounded-xl border border-brand-500/30 bg-brand-500/15 p-3">✓ Released at 17:42, recorded, and both parents are told</li>
             </ol>
-            <p className="mt-4 text-xs text-slate-400">Afterwards, anyone can see who authorised it, who checked it and who released the child.</p>
+            <p className="mt-4 text-xs text-[#94a3b8]">Afterwards, anyone can see who authorised it, who checked it and who released the child.</p>
           </div>
         </div>
       </section>
@@ -122,7 +122,7 @@ export function Website() {
             ['For room leaders', 'One screen at the door: scan or type, see who the parent authorised and any note they left, release or refuse with a reason.'],
             ['For managers', 'Today’s releases, refusals and exceptions at a glance. The full record by date, exported to a spreadsheet for an inspection or a review.'],
           ].map(([title, text]) => (
-            <div key={title} className="rounded-2xl border-t-4 border-brand-600 bg-slate-50 p-5">
+            <div key={title} className="rounded-2xl border-t-4 border-brand-600 bg-mist p-5">
               <h3 className="font-semibold text-ink">{title}</h3>
               <p className="mt-2 text-sm text-slate-600">{text}</p>
             </div>
@@ -130,7 +130,7 @@ export function Website() {
         </div>
       </section>
 
-      <section id="safeguards" className="scroll-mt-20 bg-[#f5f8fe]">
+      <section id="safeguards" className="scroll-mt-20 bg-mist">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <h2 className="text-3xl text-ink md:text-4xl">Safeguards built in</h2>
           <p className="mt-2 max-w-2xl text-slate-600">
@@ -164,10 +164,10 @@ export function Website() {
         <p className="mt-4 text-sm text-slate-500">Paid pilots are invoiced only after the pilot scope has been agreed in writing.</p>
       </section>
 
-      <section id="faq" className="scroll-mt-20 bg-[#f5f8fe]">
+      <section id="faq" className="scroll-mt-20 bg-mist">
         <div className="mx-auto max-w-4xl px-4 py-16">
           <h2 className="text-3xl text-ink md:text-4xl">Questions</h2>
-          <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+          <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-surface">
             {FAQ.map(([q, a]) => (
               <details key={q} className="group p-5">
                 <summary className="cursor-pointer list-none font-semibold text-ink">
