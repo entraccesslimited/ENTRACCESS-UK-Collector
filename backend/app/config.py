@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str | None = None
     SMTP_PASSWORD: str | None = None
     SMTP_STARTTLS: bool = False
+    # Where enquiries from the website are emailed. Unset: they are only kept
+    # for the company portal.
+    SUPPORT_EMAIL: str | None = None
 
     @model_validator(mode="after")
     def _no_dev_secrets_in_production(self) -> Settings:

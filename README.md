@@ -42,9 +42,14 @@ does not replace registers, learning journals or staff judgement.
 - Operators are a separate kind of account, created from a shell with
   `python -m app.create_operator`, never over the API.
 
-### Three portals, one sign-in
+### The website, and three portals
 
-The front page offers the **Parent**, **Nursery** and **Company** portals. Each
+The front page is the public website: how it works, the safeguards, pricing,
+questions, a privacy page (`/privacy`) and an enquiry form whose enquiries land
+in the company portal (and, if `SUPPORT_EMAIL` is set, in that mailbox). The
+form is rate-limited and has a hidden field that traps bots.
+
+**Sign in** leads to `/portals`, which offers the **Parent**, **Nursery** and **Company** portals. Each
 goes to the same sign-in, and the account decides what opens: `/parent`,
 `/admin` (managers) or `/door` (room leaders), and `/company`.
 

@@ -23,6 +23,7 @@ from app.models import (
     CheckResult,
     Child,
     DoorCheck,
+    Enquiry,
     Handover,
     HandoverOutcome,
     Nursery,
@@ -30,7 +31,7 @@ from app.models import (
     Role,
     User,
 )
-from app.schemas import CompanyOverview, NewNursery, NurseryRow
+from app.schemas import CompanyOverview, EnquiryOut, NewNursery, NurseryRow
 from app.security import hash_password, password_problem
 
 router = APIRouter(prefix="/company", tags=["company"])
@@ -191,3 +192,20 @@ async def reactivate(
     nursery_id: uuid.UUID, operator: CurrentOperator, session: SessionDep
 ) -> NurseryRow:
     return await _set_active(session, operator, nursery_id, True)
+
+
+@router.get("/enquiries", response_model=list[EnquiryOut])
+async def enquiries(_operator: CurrentOperator, session: SessionDep) -> list[Enquiry]:
+    rows = await session.scalars(select(Enquiry).order_by(Enquiry.created_at.desc()).limit(500))
+    return list(rows.all())
+
+
+@router.post("/enquiries/{enquiry_id}/handled", response_model=EnquiryOut)
+async def handled(enquiry_id: uuid.UUID, operator: CurrentOperator, session: SessionDep) -> Enquiry:
+    enquiry = await session.get(Enquiry, enquiry_id)
+    if enquiry is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such enquiry.")
+    if enquiry.handled_at is None:
+        enquiry.handled_at = datetime.now(UTC)
+        enquiry.handled_by = operator.email
+    return enquiry

@@ -58,6 +58,33 @@ def _compose(handover: Handover, nursery: Nursery, to: str) -> EmailMessage:
     return message
 
 
+async def send(to: str, subject: str, body: str, *, reply_to: str | None = None) -> None:
+    """Send one plain message, or keep it in the outbox when email is off."""
+    settings = get_settings()
+    message = EmailMessage()
+    message["From"] = settings.EMAIL_FROM
+    message["To"] = to
+    message["Subject"] = subject
+    if reply_to:
+        message["Reply-To"] = reply_to
+    message.set_content(body)
+    if not settings.EMAIL_ENABLED:
+        OUTBOX.messages.append(message)
+        return
+    try:
+        await aiosmtplib.send(
+            message,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USERNAME,
+            password=settings.SMTP_PASSWORD,
+            start_tls=settings.SMTP_STARTTLS,
+            timeout=15,
+        )
+    except (aiosmtplib.SMTPException, OSError):
+        log.exception("could not send %s", subject)
+
+
 async def notify_parents(session: AsyncSession, handover: Handover) -> None:
     nursery = await session.get(Nursery, handover.nursery_id)
     assert nursery is not None

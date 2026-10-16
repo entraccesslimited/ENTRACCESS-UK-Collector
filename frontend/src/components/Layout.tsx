@@ -16,7 +16,10 @@ const NAV = {
     { to: '/admin/people', label: 'People' },
     { to: '/admin/settings', label: 'Settings' },
   ],
-  operator: [{ to: '/company', label: 'Nurseries' }],
+  operator: [
+    { to: '/company', label: 'Nurseries' },
+    { to: '/company/enquiries', label: 'Enquiries' },
+  ],
 }
 
 export function Layout() {

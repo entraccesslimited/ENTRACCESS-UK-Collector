@@ -251,3 +251,48 @@ class NewNursery(BaseModel):
     manager_name: str = Field(min_length=2, max_length=200)
     manager_email: EmailStr
     manager_password: str = Field(min_length=10, max_length=200)
+
+
+UK_REGIONS: tuple[str, ...] = (
+    "North East",
+    "North West",
+    "Yorkshire and the Humber",
+    "East Midlands",
+    "West Midlands",
+    "East of England",
+    "London",
+    "South East",
+    "South West",
+    "Wales",
+    "Scotland",
+    "Northern Ireland",
+)
+INTERESTS: tuple[str, ...] = ("pilot", "core", "safeguard_pro", "group", "question")
+
+
+class EnquiryIn(BaseModel):
+    contact_name: str = Field(min_length=2, max_length=120)
+    nursery_name: str = Field(min_length=2, max_length=200)
+    email: EmailStr
+    phone: str | None = Field(default=None, max_length=40)
+    region: str | None = Field(default=None, max_length=60)
+    children: str | None = Field(default=None, max_length=40, examples=["About 60"])
+    interest: str | None = Field(default=None, max_length=40)
+    message: str | None = Field(default=None, max_length=2000)
+    # Never shown to a person: a bot that fills every field gives itself away.
+    website: str | None = Field(default=None, max_length=200)
+
+
+class EnquiryOut(Out):
+    id: uuid.UUID
+    contact_name: str
+    nursery_name: str
+    email: str
+    phone: str | None
+    region: str | None
+    children: str | None
+    interest: str | None
+    message: str | None
+    created_at: datetime
+    handled_at: datetime | None
+    handled_by: str | None

@@ -22,6 +22,9 @@ export function Welcome() {
             <h1 className="text-2xl font-bold">ENTRACCESS UK Collector</h1>
             <p className="text-slate-300">Every handover, authorised.</p>
           </div>
+          <Link to="/" className="ml-auto text-sm text-slate-300 underline hover:text-white">
+            Back to the website
+          </Link>
         </div>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {(Object.keys(PORTALS) as PortalKey[]).map((key) => (

@@ -19,6 +19,7 @@ from app.main import create_app
 from app.models import Child, Nursery, Operator, ParentLink, Role, User
 from app.notify import OUTBOX
 from app.routers import auth as auth_router
+from app.routers import public as public_router
 from app.security import hash_password
 
 PASSWORD = "correct-horse-battery"
@@ -48,6 +49,7 @@ async def engine(tmp_path: Path) -> AsyncIterator[object]:
     db.use_engine(engine)
     OUTBOX.messages.clear()
     auth_router._failures.clear()
+    public_router._enquiries.clear()
     yield engine
     await engine.dispose()
 

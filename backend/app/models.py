@@ -308,3 +308,27 @@ class AuditEvent(Base):
     subject_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     detail: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class Enquiry(Base):
+    """A setting asking about the service, from the public website.
+
+    Not tied to any nursery: it is a prospect until the company sets one up.
+    Read only in the company portal.
+    """
+
+    __tablename__ = "enquiries"
+    __table_args__ = (Index("ix_enquiries_created", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    contact_name: Mapped[str] = mapped_column(String(120))
+    nursery_name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str] = mapped_column(String(254))
+    phone: Mapped[str | None] = mapped_column(String(40))
+    region: Mapped[str | None] = mapped_column(String(60))
+    children: Mapped[str | None] = mapped_column(String(40))
+    interest: Mapped[str | None] = mapped_column(String(40))
+    message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    handled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    handled_by: Mapped[str | None] = mapped_column(String(254))

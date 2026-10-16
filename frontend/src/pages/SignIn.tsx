@@ -56,7 +56,7 @@ export function SignIn() {
         </button>
         <p className="text-xs text-slate-500">
           Parents, room leaders, managers and ENTRACCESS UK all sign in here.{' '}
-          <Link to="/" className="text-brand-700 underline">
+          <Link to="/portals" className="text-brand-700 underline">
             Choose a portal
           </Link>
         </p>

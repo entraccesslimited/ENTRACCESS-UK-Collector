@@ -106,3 +106,50 @@ async def test_the_portals_do_not_cross(
     assert (await as_operator.get("/api/parent/children")).status_code == 403
     assert (await as_admin.get("/api/company/nurseries")).status_code == 403
     assert (await as_parent.get("/api/company/overview")).status_code == 403
+
+
+ENQUIRY = {
+    "contact_name": "Sarah Jones",
+    "nursery_name": "Bluebell Day Nursery",
+    "email": "sarah@bluebell.example.com",
+    "phone": "07700 900321",
+    "region": "Yorkshire and the Humber",
+    "children": "About 60",
+    "interest": "pilot",
+    "message": "We would like to try it in one room.",
+}
+
+
+async def test_an_enquiry_reaches_the_company_portal(
+    anonymous: AsyncClient, as_operator: AsyncClient
+) -> None:
+    sent = await anonymous.post(
+        "/api/public/enquiries", json=ENQUIRY, headers={"X-Requested-With": "fetch"}
+    )
+    assert sent.status_code == 201
+    rows = (await as_operator.get("/api/company/enquiries")).json()
+    assert [r["nursery_name"] for r in rows] == ["Bluebell Day Nursery"]
+    assert rows[0]["region"] == "Yorkshire and the Humber"
+    done = await as_operator.post(f"/api/company/enquiries/{rows[0]['id']}/handled")
+    assert done.json()["handled_by"] == "ops@entraccess.example.com"
+
+
+async def test_a_bot_is_thanked_and_ignored(
+    anonymous: AsyncClient, as_operator: AsyncClient
+) -> None:
+    trapped = await anonymous.post(
+        "/api/public/enquiries", json={**ENQUIRY, "website": "http://spam.example"}
+    )
+    assert trapped.status_code == 201
+    assert (await as_operator.get("/api/company/enquiries")).json() == []
+
+
+async def test_enquiries_are_rate_limited(anonymous: AsyncClient) -> None:
+    codes = [
+        (await anonymous.post("/api/public/enquiries", json=ENQUIRY)).status_code for _ in range(6)
+    ]
+    assert codes == [201] * 5 + [429]
+
+
+async def test_nurseries_cannot_read_enquiries(as_admin: AsyncClient) -> None:
+    assert (await as_admin.get("/api/company/enquiries")).status_code == 403

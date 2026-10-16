@@ -1,0 +1,296 @@
+import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+
+import { SiteLayout } from '@/components/SiteLayout'
+import { Alert } from '@/components/ui'
+import { api } from '@/lib/api'
+
+const REGIONS = [
+  'North East',
+  'North West',
+  'Yorkshire and the Humber',
+  'East Midlands',
+  'West Midlands',
+  'East of England',
+  'London',
+  'South East',
+  'South West',
+  'Wales',
+  'Scotland',
+  'Northern Ireland',
+]
+
+const STEPS = [
+  {
+    who: 'Parent',
+    title: 'Authorises the collector',
+    text: 'From their phone, a parent names who is collecting: once, on a set day, or regularly. They can remove anyone instantly.',
+  },
+  {
+    who: 'Collector',
+    title: 'Gets a pass',
+    text: 'The collector is sent a link with a QR pass. Without a phone, the parent reads them a six-digit code that changes every day.',
+  },
+  {
+    who: 'Room leader',
+    title: 'Checks it at the door',
+    text: 'Staff scan the pass or type the code against the child, see who authorised it, check photo ID, then release or refuse.',
+  },
+  {
+    who: 'Nursery',
+    title: 'Keeps the record',
+    text: 'Every check and every handover is recorded and cannot be edited. Both parents are told at once who their child left with.',
+  },
+]
+
+const SAFEGUARDS = [
+  ['One-off means once', 'A one-off pass stops working the moment the child is released. It cannot be used twice.'],
+  ['Removal is instant', 'A parent or manager removes a collector and the pass and code stop at once, even mid-check at the door.'],
+  ['Passes prove nothing about a family', 'A pass carries no name, child or date, and is signed for one nursery only. A lost one tells the finder nothing.'],
+  ['Codes cannot be guessed', 'Codes are checked against one child, never the whole nursery, and entry pauses after five wrong tries.'],
+  ['On site only, if you want it', 'An optional geofence refuses door checks from phones outside the nursery, and records how far away they were.'],
+  ['A record nobody can rewrite', 'Checks and handovers are append-only, with the names copied in, so the record reads the same years later.'],
+]
+
+const FAQ = [
+  ['Does it replace our nursery management system?', 'No. It works alongside the system you already use. It does not replace your registers, learning journals or your staff’s judgement.'],
+  ['Do parents need to download an app?', 'No. Parents use a web page on their phone, and collectors open a link. Nothing to install.'],
+  ['What if the collector has no smartphone?', 'The parent reads them the six-digit code for the day, and the room leader types it in against the child.'],
+  ['Do you take photos of children?', 'No. There are no photos of children, no facial recognition and no fingerprints, ever.'],
+  ['Where is the data kept?', 'Live deployments are hosted in the UK or European Economic Area, and data is encrypted in transit. Each nursery’s data is kept separate from every other nursery’s.'],
+  ['How does a pilot work?', 'Six to eight weeks in one room. First alongside your current process, then live once your safeguarding and data-protection review signs it off.'],
+]
+
+export function Website() {
+  return (
+    <SiteLayout>
+      <section className="bg-ink text-white">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
+          <div>
+            <p className="text-sm font-semibold tracking-widest text-sky-300">SAFE COLLECTION FOR UK NURSERIES</p>
+            <h1 className="mt-3 text-4xl font-bold leading-tight md:text-5xl">Every handover, authorised.</h1>
+            <p className="mt-4 text-lg text-slate-300">
+              Parents authorise who collects their child. Room leaders check that authorisation at the door. The nursery keeps a
+              clear record of every handover.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <a href="#contact" className="btn btn-primary px-5 py-3 text-base">
+                Ask about a pilot
+              </a>
+              <Link to="/portals" className="btn border border-white/30 px-5 py-3 text-base text-white hover:bg-white/10">
+                Sign in
+              </Link>
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
+            <p className="text-sm text-slate-300">4.15pm. A parent rings: “My mum’s picking up today. She’s not on the list.”</p>
+            <ol className="mt-4 space-y-3 text-sm">
+              <li className="rounded-lg bg-white/10 p-3">✓ Mum is authorised from the parent’s phone, for today only</li>
+              <li className="rounded-lg bg-white/10 p-3">✓ She shows her pass at the door; the room leader checks her ID</li>
+              <li className="rounded-lg bg-white/10 p-3">✓ Released at 17:42, recorded, and both parents are told</li>
+            </ol>
+            <p className="mt-4 text-xs text-slate-400">Afterwards, anyone can see who authorised it, who checked it and who released the child.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16">
+        <h2 className="text-3xl font-bold text-ink">How it works</h2>
+        <p className="mt-2 max-w-2xl text-slate-600">
+          Most nursery teams handle changed collections well, by phone, password and experience. The hard part is showing
+          afterwards exactly what happened. Collector makes good practice easy to evidence.
+        </p>
+        <div className="mt-8 grid gap-4 md:grid-cols-4">
+          {STEPS.map((step, i) => (
+            <div key={step.title} className="card">
+              <p className="text-xs font-semibold tracking-wide text-brand-600">
+                {i + 1} · {step.who.toUpperCase()}
+              </p>
+              <h3 className="mt-1 font-semibold text-ink">{step.title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{step.text}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {[
+            ['For parents', 'Authorise a grandparent for today, a childminder every Tuesday, or a neighbour in an emergency. Remove anyone in a tap. See every collection.'],
+            ['For room leaders', 'One screen at the door: scan or type, see who the parent authorised and any note they left, release or refuse with a reason.'],
+            ['For managers', 'Today’s releases, refusals and exceptions at a glance. The full record by date, exported to a spreadsheet for an inspection or a review.'],
+          ].map(([title, text]) => (
+            <div key={title} className="rounded-xl bg-slate-50 p-5">
+              <h3 className="font-semibold text-ink">{title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="safeguards" className="scroll-mt-20 bg-slate-50">
+        <div className="mx-auto max-w-6xl px-4 py-16">
+          <h2 className="text-3xl font-bold text-ink">Safeguards built in</h2>
+          <p className="mt-2 max-w-2xl text-slate-600">
+            Designed with privacy first: only what is needed to authorise a collection, no photos of children, and each
+            nursery’s data kept separate.
+          </p>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {SAFEGUARDS.map(([title, text]) => (
+              <div key={title} className="card">
+                <h3 className="font-semibold text-ink">{title}</h3>
+                <p className="mt-2 text-sm text-slate-600">{text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16">
+        <h2 className="text-3xl font-bold text-ink">Priced for a single setting, ready for a group</h2>
+        <p className="mt-2 max-w-2xl text-slate-600">
+          Per setting, per month: adding a child never changes the price. Prices are indicative while we validate them with
+          UK settings, and nobody is asked to pay before the scope is agreed.
+        </p>
+        <div className="mt-8 grid gap-4 md:grid-cols-4">
+          <Price name="Paid pilot" price="£750–£1,500" unit="per setting · 6–8 weeks" items={['Setup and import of your children', 'Staff training', 'Alongside your current process, then live', 'End-of-pilot validation report']} />
+          <Price name="Core" price="£99" unit="per setting / month" items={['Everything on this page', 'One-off and regular collectors', 'Signed passes and daily codes', 'Instant removal', 'Door checks and the full handover record', 'Optional geofence']} />
+          <Price name="Safeguard Pro" price="£179" unit="per setting / month" featured items={['Everything in Core', 'Attendance reconciliation flags, with ENTRACCESS UK', 'Live exception dashboard', 'Audit exports and a KPI summary']} />
+          <Price name="Groups" price="from £129" unit="per site / month" items={['Multi-site rollout', 'Group-level reporting', 'Start with one pilot setting', 'Volume terms']} />
+        </div>
+        <p className="mt-4 text-sm text-slate-500">Paid pilots are invoiced only after the pilot scope has been agreed in writing.</p>
+      </section>
+
+      <section id="faq" className="scroll-mt-20 bg-slate-50">
+        <div className="mx-auto max-w-4xl px-4 py-16">
+          <h2 className="text-3xl font-bold text-ink">Questions</h2>
+          <div className="mt-6 divide-y divide-slate-200 rounded-xl bg-white">
+            {FAQ.map(([q, a]) => (
+              <details key={q} className="group p-5">
+                <summary className="cursor-pointer list-none font-semibold text-ink">
+                  {q} <span className="float-right text-slate-400 group-open:rotate-45">+</span>
+                </summary>
+                <p className="mt-2 text-sm text-slate-600">{a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="contact" className="mx-auto max-w-4xl scroll-mt-20 px-4 py-16">
+        <h2 className="text-3xl font-bold text-ink">Talk to us</h2>
+        <p className="mt-2 text-slate-600">
+          Tell us about your setting. We will reply within two working days, and you can see an early prototype first. We
+          never ask for children’s or families’ details by email.
+        </p>
+        <Enquiry />
+      </section>
+    </SiteLayout>
+  )
+}
+
+function Price({ name, price, unit, items, featured }: { name: string; price: string; unit: string; items: string[]; featured?: boolean }) {
+  return (
+    <div className={`card flex flex-col ${featured ? 'ring-2 ring-brand-500' : ''}`}>
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-ink">{name}</h3>
+        {featured && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Most complete</span>}
+      </div>
+      <p className="mt-3 text-3xl font-bold text-ink">{price}</p>
+      <p className="text-xs text-slate-500">{unit}</p>
+      <ul className="mt-4 space-y-2 text-sm text-slate-600">
+        {items.map((item) => (
+          <li key={item}>✓ {item}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function Enquiry() {
+  const blank = { contact_name: '', nursery_name: '', email: '', phone: '', region: '', children: '', interest: 'pilot', message: '', website: '' }
+  const [form, setForm] = useState(blank)
+  const [sent, setSent] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const set = (key: keyof typeof form) => (event: { target: { value: string } }) => setForm({ ...form, [key]: event.target.value })
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await api<{ message: string }>('/public/enquiries', {
+        method: 'POST',
+        json: { ...form, phone: form.phone || null, region: form.region || null, children: form.children || null, message: form.message || null },
+      })
+      setSent(result.message)
+      setForm(blank)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (sent) return <div className="mt-6"><Alert tone="ok">{sent}</Alert></div>
+
+  return (
+    <form onSubmit={submit} className="card mt-6 grid gap-4 sm:grid-cols-2">
+      {error && <div className="sm:col-span-2"><Alert>{error}</Alert></div>}
+      <label>
+        <span className="label">Your name</span>
+        <input className="input" value={form.contact_name} onChange={set('contact_name')} required minLength={2} autoComplete="name" />
+      </label>
+      <label>
+        <span className="label">Nursery</span>
+        <input className="input" value={form.nursery_name} onChange={set('nursery_name')} required minLength={2} autoComplete="organization" />
+      </label>
+      <label>
+        <span className="label">Email</span>
+        <input className="input" type="email" value={form.email} onChange={set('email')} required autoComplete="email" />
+      </label>
+      <label>
+        <span className="label">Phone (optional)</span>
+        <input className="input" type="tel" value={form.phone} onChange={set('phone')} autoComplete="tel" placeholder="07700 900123" />
+      </label>
+      <label>
+        <span className="label">Region</span>
+        <select className="input" value={form.region} onChange={set('region')}>
+          <option value="">Choose a region…</option>
+          {REGIONS.map((r) => (
+            <option key={r}>{r}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        <span className="label">How many children (roughly)</span>
+        <input className="input" value={form.children} onChange={set('children')} placeholder="About 60" />
+      </label>
+      <label className="sm:col-span-2">
+        <span className="label">Interested in</span>
+        <select className="input" value={form.interest} onChange={set('interest')}>
+          <option value="pilot">A paid pilot</option>
+          <option value="core">Core</option>
+          <option value="safeguard_pro">Safeguard Pro</option>
+          <option value="group">A group of nurseries</option>
+          <option value="question">Just a question</option>
+        </select>
+      </label>
+      <label className="sm:col-span-2">
+        <span className="label">Anything else (optional)</span>
+        <textarea className="input min-h-28" value={form.message} onChange={set('message')} maxLength={2000} />
+      </label>
+      {/* Hidden from people; a bot that fills every field fills this one too. */}
+      <label className="hidden" aria-hidden="true">
+        Website
+        <input tabIndex={-1} autoComplete="off" value={form.website} onChange={set('website')} />
+      </label>
+      <div className="sm:col-span-2">
+        <button className="btn btn-primary" disabled={busy}>
+          {busy ? 'Sending…' : 'Send enquiry'}
+        </button>
+        <p className="mt-2 text-xs text-slate-500">
+          We use these details only to reply to you. See <Link to="/privacy" className="underline">privacy</Link>.
+        </p>
+      </div>
+    </form>
+  )
+}
