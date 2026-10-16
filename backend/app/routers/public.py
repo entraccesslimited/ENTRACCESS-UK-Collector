@@ -24,15 +24,15 @@ async def view_pass(token: str, session: SessionDep) -> PublicPassOut:
     not_found = HTTPException(status.HTTP_404_NOT_FOUND, "This pass is not valid.")
     auth_id = passes.peek_authorisation_id(token)
     auth = await session.get(Authorisation, auth_id) if auth_id else None
-    if auth is None:
+    nursery = await session.get(Nursery, auth.nursery_id) if auth else None
+    if auth is None or nursery is None or not nursery.active:
         raise not_found
     try:
         payload = passes.read_pass(token, nursery_id=auth.nursery_id)
     except passes.InvalidPass as exc:
         raise not_found from exc
-    nursery = await session.get(Nursery, auth.nursery_id)
     child = await session.get(Child, auth.child_id)
-    assert nursery is not None and child is not None
+    assert child is not None
     result = collection.status_of(auth, datetime.now(UTC))
     if payload.version != auth.version:
         result = CheckResult.REISSUED

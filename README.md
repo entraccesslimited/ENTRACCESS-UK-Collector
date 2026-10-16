@@ -32,6 +32,22 @@ does not replace registers, learning journals or staff judgement.
 - Remove any collector (for example for a court order or a safeguarding concern).
   Marking a child as left removes every collector for them.
 
+**ENTRACCESS UK (company portal)**
+- Every nursery on one page: children, parents, room leaders, active
+  collectors, collections and door exceptions over 30 days, and whether the
+  geofence is on. Counts only: no child, parent or collector is ever named.
+- Set up a nursery together with its first manager, who then adds everyone else.
+- Suspend a nursery (nobody there can sign in, open sessions stop and its
+  pass links stop working; nothing is deleted) and reactivate it.
+- Operators are a separate kind of account, created from a shell with
+  `python -m app.create_operator`, never over the API.
+
+### Three portals, one sign-in
+
+The front page offers the **Parent**, **Nursery** and **Company** portals. Each
+goes to the same sign-in, and the account decides what opens: `/parent`,
+`/admin` (managers) or `/door` (room leaders), and `/company`.
+
 ## How it keeps children safe
 
 - **Nothing secret is stored.** A pass (`CP1.<payload>.<signature>`) is signed
@@ -66,6 +82,7 @@ Open <http://localhost:8090> and sign in with any demo account (password
 
 | Role    | Email                     |
 | ------- | ------------------------- |
+| Company (operator) | operator@demo.example.com |
 | Manager | admin@demo.example.com    |
 | Room leader | staff@demo.example.com |
 | Parent  | parent@demo.example.com   |

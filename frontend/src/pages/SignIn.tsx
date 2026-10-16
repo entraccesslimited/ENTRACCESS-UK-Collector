@@ -1,18 +1,22 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Alert } from '@/components/ui'
-import { homeFor, useSession } from '@/lib/session'
+import { landingFor, PORTALS, useSession, type PortalKey } from '@/lib/session'
 
 export function SignIn() {
   const { me, signIn } = useSession()
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const portalKey = params.get('portal') as PortalKey | null
+  const portal = portalKey && portalKey in PORTALS ? PORTALS[portalKey] : null
+  const next = params.get('next') ?? portal?.path ?? null
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  if (me) return <Navigate to={homeFor(me)} replace />
+  if (me) return <Navigate to={landingFor(me, next)} replace />
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -20,7 +24,7 @@ export function SignIn() {
     setError(null)
     try {
       const user = await signIn(email, password)
-      navigate(homeFor(user), { replace: true })
+      navigate(landingFor(user, next), { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not sign in.')
     } finally {
@@ -34,7 +38,7 @@ export function SignIn() {
         <div className="flex items-center gap-3">
           <img src="/favicon.svg" alt="" className="size-10 rounded-lg" />
           <div>
-            <h1 className="text-lg font-bold">ENTRACCESS UK</h1>
+            <h1 className="text-lg font-bold">{portal ? portal.title : 'ENTRACCESS UK'}</h1>
             <p className="text-sm text-slate-500">Every handover, authorised.</p>
           </div>
         </div>
@@ -50,7 +54,12 @@ export function SignIn() {
         <button className="btn btn-primary w-full" disabled={busy || !email || !password}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-        <p className="text-xs text-slate-500">Parents, room leaders and managers all sign in here.</p>
+        <p className="text-xs text-slate-500">
+          Parents, room leaders, managers and ENTRACCESS UK all sign in here.{' '}
+          <Link to="/" className="text-brand-700 underline">
+            Choose a portal
+          </Link>
+        </p>
       </form>
     </div>
   )

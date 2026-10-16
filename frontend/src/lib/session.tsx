@@ -48,5 +48,23 @@ export function useSession(): SessionState {
 }
 
 export function homeFor(me: Me): string {
-  return me.role === 'parent' ? '/parent' : me.role === 'staff' ? '/door' : '/admin'
+  return { parent: '/parent', staff: '/door', admin: '/admin', operator: '/company' }[me.role]
+}
+
+/** The portals, as somebody arriving chooses between them. */
+export const PORTALS = {
+  parent: { title: 'Parent portal', path: '/parent', roles: ['parent'] },
+  nursery: { title: 'Nursery portal', path: '/admin', roles: ['admin', 'staff'] },
+  company: { title: 'Company portal', path: '/company', roles: ['operator'] },
+} as const
+
+export type PortalKey = keyof typeof PORTALS
+
+/** Where to go after signing in: the page asked for, if this account may see it. */
+export function landingFor(me: Me, next: string | null): string {
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return homeFor(me)
+  const portal = Object.values(PORTALS).find((p) => next.startsWith(p.path))
+  if (portal && !(portal.roles as readonly string[]).includes(me.role)) return homeFor(me)
+  if (next.startsWith('/door') && !['staff', 'admin'].includes(me.role)) return homeFor(me)
+  return next
 }

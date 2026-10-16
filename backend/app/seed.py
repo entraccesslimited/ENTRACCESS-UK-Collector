@@ -14,10 +14,11 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import sessionmaker
-from app.models import Child, Nursery, ParentLink, Role, User
+from app.models import Child, Nursery, Operator, ParentLink, Role, User
 from app.security import hash_password
 
 DEMO_PASSWORD = "demo-password-123"
+OPERATOR_EMAIL = "operator@demo.example.com"
 
 PEOPLE = [
     ("admin@demo.example.com", "Amira Khan", Role.ADMIN),
@@ -32,8 +33,18 @@ async def seed() -> None:
     if get_settings().ENVIRONMENT == "production":
         raise SystemExit("Refusing to load demo data into production.")
     async with sessionmaker()() as session:
+        if not await session.scalar(select(Operator).where(Operator.email == OPERATOR_EMAIL)):
+            session.add(
+                Operator(
+                    email=OPERATOR_EMAIL,
+                    full_name="ENTRACCESS UK (demo operator)",
+                    password_hash=hash_password(DEMO_PASSWORD),
+                )
+            )
+            await session.commit()
+            print(f"Company portal: {OPERATOR_EMAIL}, password {DEMO_PASSWORD}")
         if await session.scalar(select(Nursery).where(Nursery.slug == "demo")):
-            print("Demo nursery already exists. Nothing to do.")
+            print("Demo nursery already exists. Nothing more to do.")
             return
         nursery = Nursery(
             name="Little Acorns Nursery (demo)", slug="demo", timezone="Europe/London"

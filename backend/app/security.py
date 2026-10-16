@@ -44,11 +44,21 @@ def password_problem(password: str) -> str | None:
     return None
 
 
-def issue_session(user_id: uuid.UUID) -> str:
+USER = "user"
+OPERATOR = "operator"
+
+
+def issue_session(subject_id: uuid.UUID, kind: str = USER) -> str:
+    """A session for a nursery's user, or for a company operator.
+
+    The kind is signed into the token, so a nursery user's session can never
+    be read as an operator's, whatever ids happen to collide.
+    """
     settings = get_settings()
     now = datetime.now(UTC)
     claims = {
-        "sub": str(user_id),
+        "sub": str(subject_id),
+        "kind": kind,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(hours=settings.SESSION_HOURS)).timestamp()),
         "typ": "session",
@@ -56,14 +66,14 @@ def issue_session(user_id: uuid.UUID) -> str:
     return jwt.encode(claims, settings.SECRET_KEY, algorithm="HS256")
 
 
-def read_session(token: str) -> uuid.UUID | None:
+def read_session(token: str) -> tuple[str, uuid.UUID] | None:
     try:
         claims = jwt.decode(token, get_settings().SECRET_KEY, algorithms=["HS256"])
     except jwt.PyJWTError:
         return None
-    if claims.get("typ") != "session":
+    if claims.get("typ") != "session" or claims.get("kind") not in (USER, OPERATOR):
         return None
     try:
-        return uuid.UUID(str(claims["sub"]))
+        return str(claims["kind"]), uuid.UUID(str(claims["sub"]))
     except (KeyError, ValueError):
         return None

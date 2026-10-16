@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -23,8 +24,8 @@ class Me(Out):
     id: uuid.UUID
     email: str
     full_name: str
-    role: Role
-    nursery_name: str
+    role: Literal["admin", "staff", "parent", "operator"]
+    nursery_name: str = Field(description="The nursery's name, or the company's for an operator.")
 
 
 class ChildOut(Out):
@@ -215,3 +216,38 @@ class LinkOut(BaseModel):
     child_id: uuid.UUID
     child_name: str
     relationship_label: str
+
+
+class NurseryRow(BaseModel):
+    """One nursery as the company portal sees it: settings and counts only."""
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    active: bool
+    created_at: datetime
+    geofence_on: bool
+    children: int
+    parents: int
+    room_leaders: int
+    managers: int
+    active_collectors: int
+    collections_30d: int
+    exceptions_30d: int
+
+
+class CompanyOverview(BaseModel):
+    nurseries: int
+    active_nurseries: int
+    children: int
+    active_collectors: int
+    collections_30d: int
+    exceptions_30d: int
+
+
+class NewNursery(BaseModel):
+    name: str = Field(min_length=2, max_length=200, examples=["Little Acorns Nursery, Sheffield"])
+    slug: str = Field(min_length=3, max_length=50, examples=["little-acorns-sheffield"])
+    manager_name: str = Field(min_length=2, max_length=200)
+    manager_email: EmailStr
+    manager_password: str = Field(min_length=10, max_length=200)

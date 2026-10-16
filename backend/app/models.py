@@ -29,6 +29,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    true,
 )
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -131,6 +132,29 @@ class Nursery(Base):
     geofence_latitude: Mapped[float | None] = mapped_column(Float)
     geofence_longitude: Mapped[float | None] = mapped_column(Float)
     geofence_radius_m: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # A suspended nursery's people cannot sign in, and sessions already open
+    # stop working. Nothing is deleted: reactivating restores everything.
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+
+
+class Operator(Base):
+    """Someone at ENTRACCESS UK who runs the company portal.
+
+    A separate table rather than a role on `users`, so an operator belongs to no
+    nursery and no nursery query can ever return one. Operators see each
+    nursery's counts and can set nurseries up, suspend and reactivate them; they
+    cannot read a child, a parent or a collector.
+    """
+
+    __tablename__ = "operators"
+    __table_args__ = (UniqueConstraint("email", name="uq_operators_email"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(254))
+    full_name: Mapped[str] = mapped_column(String(200))
+    password_hash: Mapped[str] = mapped_column(String(255))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 

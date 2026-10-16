@@ -6,7 +6,12 @@ import { useSession } from '@/lib/session'
 import { useLoad } from '@/lib/useLoad'
 import type { Person, Role } from '@/lib/types'
 
-const ROLE_LABEL: Record<Role, string> = { admin: 'Manager', staff: 'Room leader', parent: 'Parent' }
+const ROLE_LABEL: Record<Role, string> = {
+  admin: 'Manager',
+  staff: 'Room leader',
+  parent: 'Parent',
+  operator: 'ENTRACCESS UK',
+}
 
 export function AdminPeople() {
   const { me } = useSession()

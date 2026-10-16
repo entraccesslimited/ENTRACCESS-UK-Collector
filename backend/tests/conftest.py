@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app import db
 from app.main import create_app
-from app.models import Child, Nursery, ParentLink, Role, User
+from app.models import Child, Nursery, Operator, ParentLink, Role, User
 from app.notify import OUTBOX
 from app.routers import auth as auth_router
 from app.security import hash_password
@@ -96,6 +96,13 @@ async def world(session: AsyncSession) -> World:
             ParentLink(nursery_id=other.id, parent_id=other_parent.id, child_id=other_child.id),
         ]
     )
+    session.add(
+        Operator(
+            email="ops@entraccess.example.com",
+            full_name="Olivia Operator",
+            password_hash=hash_password(PASSWORD),
+        )
+    )
     await session.commit()
     return World(
         nursery,
@@ -165,4 +172,10 @@ async def as_other_parent(app: object, world: World) -> AsyncIterator[AsyncClien
 @pytest.fixture
 async def anonymous(app: object) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:  # type: ignore[arg-type]
+        yield c
+
+
+@pytest.fixture
+async def as_operator(app: object, world: World) -> AsyncIterator[AsyncClient]:  # noqa: ARG001
+    async with signed_in(app, "ops@entraccess.example.com") as c:
         yield c

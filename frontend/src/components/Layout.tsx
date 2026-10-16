@@ -16,6 +16,7 @@ const NAV = {
     { to: '/admin/people', label: 'People' },
     { to: '/admin/settings', label: 'Settings' },
   ],
+  operator: [{ to: '/company', label: 'Nurseries' }],
 }
 
 export function Layout() {

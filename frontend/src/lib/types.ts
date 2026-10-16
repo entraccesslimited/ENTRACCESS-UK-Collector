@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'staff' | 'parent'
+export type Role = 'admin' | 'staff' | 'parent' | 'operator'
 export type Kind = 'regular' | 'one_off'
 export type CheckResult =
   | 'valid'
@@ -130,4 +130,29 @@ export interface Link {
   child_id: string
   child_name: string
   relationship_label: string
+}
+
+export interface NurseryRow {
+  id: string
+  name: string
+  slug: string
+  active: boolean
+  created_at: string
+  geofence_on: boolean
+  children: number
+  parents: number
+  room_leaders: number
+  managers: number
+  active_collectors: number
+  collections_30d: number
+  exceptions_30d: number
+}
+
+export interface CompanyOverview {
+  nurseries: number
+  active_nurseries: number
+  children: number
+  active_collectors: number
+  collections_30d: number
+  exceptions_30d: number
 }

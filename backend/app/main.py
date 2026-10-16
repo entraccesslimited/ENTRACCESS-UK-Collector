@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.collection import CollectionError
 from app.config import get_settings
-from app.routers import admin, auth, door, parent, public
+from app.routers import admin, auth, company, door, parent, public
 
 
 def create_app() -> FastAPI:
@@ -35,7 +35,14 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    for router in (auth.router, parent.router, door.router, admin.router, public.router):
+    for router in (
+        auth.router,
+        parent.router,
+        door.router,
+        admin.router,
+        company.router,
+        public.router,
+    ):
         app.include_router(router, prefix="/api")
     return app
 
