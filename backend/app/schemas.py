@@ -267,7 +267,7 @@ UK_REGIONS: tuple[str, ...] = (
     "Scotland",
     "Northern Ireland",
 )
-INTERESTS: tuple[str, ...] = ("pilot", "core", "safeguard_pro", "group", "question")
+INTERESTS: tuple[str, ...] = ("demo", "pilot", "core", "safeguard_pro", "group", "question")
 
 
 class EnquiryIn(BaseModel):

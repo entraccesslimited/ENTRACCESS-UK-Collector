@@ -75,11 +75,11 @@ export function Website() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="#contact" className="btn btn-primary px-5 py-3 text-base">
-                Ask about a pilot
+                Book a demo
               </a>
-              <Link to="/portals" className="btn border border-white/30 px-5 py-3 text-base text-white hover:bg-white/10">
-                Sign in
-              </Link>
+              <a href="#pricing" className="btn border border-white/30 px-5 py-3 text-base text-white hover:bg-white/10">
+                See pricing
+              </a>
             </div>
           </div>
           <div className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
@@ -146,8 +146,8 @@ export function Website() {
       <section id="pricing" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16">
         <h2 className="text-3xl font-bold text-ink">Priced for a single setting, ready for a group</h2>
         <p className="mt-2 max-w-2xl text-slate-600">
-          Per setting, per month: adding a child never changes the price. Prices are indicative while we validate them with
-          UK settings, and nobody is asked to pay before the scope is agreed.
+          Per setting, per month: adding a child never changes the price. Most settings start with a paid pilot in one room,
+          and nobody is asked to pay before the scope is agreed.
         </p>
         <div className="mt-8 grid gap-4 md:grid-cols-4">
           <Price name="Paid pilot" price="£750–£1,500" unit="per setting · 6–8 weeks" items={['Setup and import of your children', 'Staff training', 'Alongside your current process, then live', 'End-of-pilot validation report']} />
@@ -177,7 +177,7 @@ export function Website() {
       <section id="contact" className="mx-auto max-w-4xl scroll-mt-20 px-4 py-16">
         <h2 className="text-3xl font-bold text-ink">Talk to us</h2>
         <p className="mt-2 text-slate-600">
-          Tell us about your setting. We will reply within two working days, and you can see an early prototype first. We
+          Tell us about your setting. We will reply within two working days, and can show you a demo first. We
           never ask for children’s or families’ details by email.
         </p>
         <Enquiry />
@@ -205,7 +205,7 @@ function Price({ name, price, unit, items, featured }: { name: string; price: st
 }
 
 function Enquiry() {
-  const blank = { contact_name: '', nursery_name: '', email: '', phone: '', region: '', children: '', interest: 'pilot', message: '', website: '' }
+  const blank = { contact_name: '', nursery_name: '', email: '', phone: '', region: '', children: '', interest: 'demo', message: '', website: '' }
   const [form, setForm] = useState(blank)
   const [sent, setSent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -267,6 +267,7 @@ function Enquiry() {
       <label className="sm:col-span-2">
         <span className="label">Interested in</span>
         <select className="input" value={form.interest} onChange={set('interest')}>
+          <option value="demo">A demo</option>
           <option value="pilot">A paid pilot</option>
           <option value="core">Core</option>
           <option value="safeguard_pro">Safeguard Pro</option>

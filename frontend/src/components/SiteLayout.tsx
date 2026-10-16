@@ -1,8 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
-import { homeFor, useSession } from '@/lib/session'
-
 const LINKS = [
   { href: '/#how', label: 'How it works' },
   { href: '/#safeguards', label: 'Safeguards' },
@@ -11,9 +9,8 @@ const LINKS = [
   { href: '/#contact', label: 'Contact' },
 ]
 
-/** The public website's frame: header with the portals, footer with the legal bits. */
+/** The public website's frame: header with the page sections, footer with the legal bits. */
 export function SiteLayout({ children }: { children: ReactNode }) {
-  const { me } = useSession()
   const [open, setOpen] = useState(false)
   return (
     <div className="min-h-screen bg-white text-slate-800">
@@ -33,9 +30,9 @@ export function SiteLayout({ children }: { children: ReactNode }) {
               </a>
             ))}
           </nav>
-          <Link to={me ? homeFor(me) : '/portals'} className="btn btn-primary ml-auto md:ml-0">
-            {me ? 'Open your portal' : 'Sign in'}
-          </Link>
+          <a href="/#contact" className="btn btn-primary ml-auto md:ml-0">
+            Book a demo
+          </a>
           <button className="rounded-md p-2 md:hidden" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>
             ☰
           </button>
@@ -52,16 +49,10 @@ export function SiteLayout({ children }: { children: ReactNode }) {
       </header>
       <main>{children}</main>
       <footer className="bg-ink text-slate-300">
-        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 text-sm md:grid-cols-3">
+        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 text-sm md:grid-cols-2">
           <div>
             <p className="font-semibold text-white">ENTRACCESS UK Collector</p>
             <p className="mt-1">Every handover, authorised. Safe, recorded child collection for UK nurseries.</p>
-          </div>
-          <div className="space-y-1">
-            <p className="font-semibold text-white">Portals</p>
-            <Link to="/sign-in?portal=parent" className="block hover:text-white">Parent portal</Link>
-            <Link to="/sign-in?portal=nursery" className="block hover:text-white">Nursery portal</Link>
-            <Link to="/sign-in?portal=company" className="block hover:text-white">Company portal</Link>
           </div>
           <div className="space-y-1">
             <p className="font-semibold text-white">Company</p>
@@ -70,7 +61,7 @@ export function SiteLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <p className="border-t border-white/10 px-4 py-4 text-center text-xs">
-          © 2026 ENTRACCESS UK LTD. Registered in England and Wales. Early prototype, shown with made-up data.
+          © 2026 ENTRACCESS UK LTD. Registered in England and Wales.
         </p>
       </footer>
     </div>

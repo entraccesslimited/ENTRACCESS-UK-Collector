@@ -19,6 +19,7 @@ interface Enquiry {
 }
 
 const INTEREST: Record<string, string> = {
+  demo: 'Demo',
   pilot: 'Paid pilot',
   core: 'Core',
   safeguard_pro: 'Safeguard Pro',
