@@ -14,6 +14,7 @@ const NAV = {
     { to: '/admin/handovers', label: 'Handovers' },
     { to: '/admin/children', label: 'Children' },
     { to: '/admin/people', label: 'People' },
+    { to: '/admin/settings', label: 'Settings' },
   ],
 }
 

@@ -6,6 +6,7 @@ import type { Role } from '@/lib/types'
 import { AdminChildren } from '@/pages/AdminChildren'
 import { AdminHandovers } from '@/pages/AdminHandovers'
 import { AdminPeople } from '@/pages/AdminPeople'
+import { AdminSettings } from '@/pages/AdminSettings'
 import { AdminToday } from '@/pages/AdminToday'
 import { Door } from '@/pages/Door'
 import { ParentHistory } from '@/pages/ParentHistory'
@@ -41,6 +42,7 @@ export function App() {
         <Route path="/admin/handovers" element={<Guard roles={['admin']}><AdminHandovers /></Guard>} />
         <Route path="/admin/children" element={<Guard roles={['admin']}><AdminChildren /></Guard>} />
         <Route path="/admin/people" element={<Guard roles={['admin']}><AdminPeople /></Guard>} />
+        <Route path="/admin/settings" element={<Guard roles={['admin']}><AdminSettings /></Guard>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

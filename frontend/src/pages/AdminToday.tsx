@@ -39,7 +39,14 @@ export function AdminToday() {
               {exceptions.data.map((c) => (
                 <tr key={c.id}>
                   <td>{when(c.checked_at)}</td>
-                  <td className="font-medium text-red-700">{STATUS_LABEL[c.result]}</td>
+                  <td className="font-medium text-red-700">
+                    {STATUS_LABEL[c.result]}
+                    {c.result === 'outside_geofence' && c.distance_m !== null && (
+                      <span className="block text-xs font-normal text-slate-500">
+                        {c.distance_m >= 1000 ? `${(c.distance_m / 1000).toFixed(1)} km` : `${Math.round(c.distance_m)} m`} away
+                      </span>
+                    )}
+                  </td>
                   <td>{c.child_name ?? '—'}</td>
                   <td>{c.collector_name ?? '—'}</td>
                   <td>{c.staff_name}</td>

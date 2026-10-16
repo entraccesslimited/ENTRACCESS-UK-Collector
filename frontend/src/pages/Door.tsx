@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Alert, PageTitle } from '@/components/ui'
 import { api } from '@/lib/api'
 import { day } from '@/lib/format'
+import { currentPosition } from '@/lib/location'
 import { useLoad } from '@/lib/useLoad'
 import type { Check, Child, Handover } from '@/lib/types'
 
@@ -17,8 +18,15 @@ declare global {
   }
 }
 
+/** Where this phone is, when the nursery has a geofence; nothing otherwise. */
+async function where(fenced: boolean) {
+  return fenced ? { position: await currentPosition() } : {}
+}
+
 export function Door() {
   const [mode, setMode] = useState<Mode>('scan')
+  const fence = useLoad<{ enabled: boolean }>('/door/geofence')
+  const fenced = Boolean(fence.data?.enabled)
   const [check, setCheck] = useState<Check | null>(null)
   const [done, setDone] = useState<Handover | null>(null)
 
@@ -47,14 +55,19 @@ export function Door() {
               </button>
             ))}
           </div>
-          {mode === 'scan' ? <ScanPass onChecked={setCheck} /> : <EnterCode onChecked={setCheck} />}
+          {fenced && (
+            <p className="mb-3 max-w-md text-sm text-slate-600">
+              This nursery has a geofence: each check sends this phone’s location. Allow location if asked.
+            </p>
+          )}
+          {mode === 'scan' ? <ScanPass fenced={fenced} onChecked={setCheck} /> : <EnterCode fenced={fenced} onChecked={setCheck} />}
         </>
       )}
     </>
   )
 }
 
-function ScanPass({ onChecked }: { onChecked: (check: Check) => void }) {
+function ScanPass({ fenced, onChecked }: { fenced: boolean; onChecked: (check: Check) => void }) {
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [camera, setCamera] = useState(false)
@@ -64,7 +77,9 @@ function ScanPass({ onChecked }: { onChecked: (check: Check) => void }) {
   const submit = async (value: string) => {
     setError(null)
     try {
-      onChecked(await api<Check>('/door/check/pass', { method: 'POST', json: { token: value.trim() } }))
+      onChecked(
+        await api<Check>('/door/check/pass', { method: 'POST', json: { token: value.trim(), ...(await where(fenced)) } }),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not check the pass.')
     }
@@ -136,7 +151,7 @@ function ScanPass({ onChecked }: { onChecked: (check: Check) => void }) {
   )
 }
 
-function EnterCode({ onChecked }: { onChecked: (check: Check) => void }) {
+function EnterCode({ fenced, onChecked }: { fenced: boolean; onChecked: (check: Check) => void }) {
   const children = useLoad<Child[]>('/door/children')
   const [childId, setChildId] = useState('')
   const [code, setCode] = useState('')
@@ -149,7 +164,9 @@ function EnterCode({ onChecked }: { onChecked: (check: Check) => void }) {
     event.preventDefault()
     setError(null)
     try {
-      onChecked(await api<Check>('/door/check/code', { method: 'POST', json: { child_id: childId, code } }))
+      onChecked(
+        await api<Check>('/door/check/code', { method: 'POST', json: { child_id: childId, code, ...(await where(fenced)) } }),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not check the code.')
     }

@@ -38,6 +38,8 @@ export const STATUS_LABEL: Record<CheckResult, string> = {
   already_used: 'Used',
   wrong_code: 'Wrong code',
   locked: 'Paused',
+  outside_geofence: 'Off site',
+  no_location: 'No location',
 }
 
 export function validity(auth: Pick<Authorisation, 'kind' | 'valid_from' | 'valid_until'>): string {

@@ -12,6 +12,8 @@ export type CheckResult =
   | 'already_used'
   | 'wrong_code'
   | 'locked'
+  | 'outside_geofence'
+  | 'no_location'
 
 export interface Me {
   id: string
@@ -103,6 +105,7 @@ export interface DoorCheck {
   child_name: string | null
   collector_name: string | null
   staff_name: string
+  distance_m: number | null
 }
 
 export interface Today {
