@@ -7,9 +7,13 @@
   --color-brand-600: #2563eb;
   --color-brand-700: #1d4ed8;
   --color-ink: #0f172a;
+  --color-midnight: #0b1220;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-html { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+html { font-family: var(--font-sans); }
+@layer components {
 body { @apply bg-slate-50 text-slate-900; }
 .input { @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100; }
 .label { @apply mb-1 block text-sm font-medium text-slate-700; }
@@ -21,3 +25,29 @@ body { @apply bg-slate-50 text-slate-900; }
 .btn-success { @apply bg-emerald-600 text-white hover:bg-emerald-700; }
 th { @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
 td { @apply px-3 py-2 text-sm; }
+
+/* The public website: the ENTRACCESS UK look, shared with the company site.
+   Scoped to .site so the portals keep their plainer controls. */
+.site h1, .site h2, .site h3 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.025em; }
+.site .btn { @apply rounded-full; }
+.site .btn-primary { box-shadow: 0 8px 20px -10px rgb(37 99 235 / 0.7); }
+.site .card { @apply rounded-2xl transition hover:-translate-y-0.5 hover:border-brand-500/40; }
+.site .input { @apply rounded-xl; }
+.hero-grid {
+  background:
+    radial-gradient(60rem 30rem at 85% -10%, rgb(96 165 250 / 0.22), transparent 60%),
+    linear-gradient(rgb(37 99 235 / 0.07) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, rgb(37 99 235 / 0.07) 1px, transparent 1px) 0 0 / 44px 44px,
+    #eef4ff;
+}
+.blue-panel {
+  background:
+    radial-gradient(40rem 20rem at 100% 0%, rgb(96 165 250 / 0.35), transparent 60%),
+    linear-gradient(135deg, #1d4ed8 0%, #172554 70%, #0b1220 100%);
+}
+.arch-mark { @apply relative grid size-11 place-items-center rounded-xl bg-brand-50; }
+.arch-mark::after {
+  content: ""; width: 20px; height: 22px; margin-top: 4px;
+  border: 3.5px solid var(--color-brand-600); border-bottom: 0; border-radius: 10px 10px 0 0;
+}
+}

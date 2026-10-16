@@ -64,30 +64,32 @@ const FAQ = [
 export function Website() {
   return (
     <SiteLayout>
-      <section className="bg-ink text-white">
+      <section className="hero-grid border-b border-slate-200">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
           <div>
-            <p className="text-sm font-semibold tracking-widest text-sky-300">SAFE COLLECTION FOR UK NURSERIES</p>
-            <h1 className="mt-3 text-4xl font-bold leading-tight md:text-5xl">Every handover, authorised.</h1>
-            <p className="mt-4 text-lg text-slate-300">
+            <p className="inline-block rounded-full bg-brand-50 px-3 py-1 text-xs font-bold tracking-widest text-brand-700">
+              SAFE COLLECTION FOR UK NURSERIES
+            </p>
+            <h1 className="mt-4 text-4xl leading-[1.05] text-ink md:text-6xl">Every handover, authorised.</h1>
+            <p className="mt-5 text-lg text-slate-600">
               Parents authorise who collects their child. Room leaders check that authorisation at the door. The nursery keeps a
               clear record of every handover.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a href="#contact" className="btn btn-primary px-5 py-3 text-base">
+              <a href="#contact" className="btn btn-primary px-6 py-3 text-base">
                 Book a demo
               </a>
-              <a href="#pricing" className="btn border border-white/30 px-5 py-3 text-base text-white hover:bg-white/10">
+              <a href="#pricing" className="btn btn-secondary border-slate-300 px-6 py-3 text-base hover:border-brand-500 hover:bg-white hover:text-brand-700">
                 See pricing
               </a>
             </div>
           </div>
-          <div className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
+          <div className="rounded-3xl bg-[#111a2e] p-6 text-white shadow-[0_30px_70px_-28px_rgb(29_78_216/0.55)] ring-1 ring-brand-500/25">
             <p className="text-sm text-slate-300">4.15pm. A parent rings: “My mum’s picking up today. She’s not on the list.”</p>
             <ol className="mt-4 space-y-3 text-sm">
-              <li className="rounded-lg bg-white/10 p-3">✓ Mum is authorised from the parent’s phone, for today only</li>
-              <li className="rounded-lg bg-white/10 p-3">✓ She shows her pass at the door; the room leader checks her ID</li>
-              <li className="rounded-lg bg-white/10 p-3">✓ Released at 17:42, recorded, and both parents are told</li>
+              <li className="rounded-xl border border-brand-500/30 bg-brand-500/15 p-3">✓ Mum is authorised from the parent’s phone, for today only</li>
+              <li className="rounded-xl border border-brand-500/30 bg-brand-500/15 p-3">✓ She shows her pass at the door; the room leader checks her ID</li>
+              <li className="rounded-xl border border-brand-500/30 bg-brand-500/15 p-3">✓ Released at 17:42, recorded, and both parents are told</li>
             </ol>
             <p className="mt-4 text-xs text-slate-400">Afterwards, anyone can see who authorised it, who checked it and who released the child.</p>
           </div>
@@ -95,7 +97,7 @@ export function Website() {
       </section>
 
       <section id="how" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16">
-        <h2 className="text-3xl font-bold text-ink">How it works</h2>
+        <h2 className="text-3xl text-ink md:text-4xl">How it works</h2>
         <p className="mt-2 max-w-2xl text-slate-600">
           Most nursery teams handle changed collections well, by phone, password and experience. The hard part is showing
           afterwards exactly what happened. Collector makes good practice easy to evidence.
@@ -103,9 +105,12 @@ export function Website() {
         <div className="mt-8 grid gap-4 md:grid-cols-4">
           {STEPS.map((step, i) => (
             <div key={step.title} className="card">
-              <p className="text-xs font-semibold tracking-wide text-brand-600">
-                {i + 1} · {step.who.toUpperCase()}
-              </p>
+              <div className="flex items-center gap-3">
+                <span className="grid size-9 place-items-center rounded-full bg-brand-600 font-display text-sm font-extrabold text-white">
+                  {i + 1}
+                </span>
+                <span className="text-xs font-bold tracking-widest text-brand-600">{step.who.toUpperCase()}</span>
+              </div>
               <h3 className="mt-1 font-semibold text-ink">{step.title}</h3>
               <p className="mt-2 text-sm text-slate-600">{step.text}</p>
             </div>
@@ -117,7 +122,7 @@ export function Website() {
             ['For room leaders', 'One screen at the door: scan or type, see who the parent authorised and any note they left, release or refuse with a reason.'],
             ['For managers', 'Today’s releases, refusals and exceptions at a glance. The full record by date, exported to a spreadsheet for an inspection or a review.'],
           ].map(([title, text]) => (
-            <div key={title} className="rounded-xl bg-slate-50 p-5">
+            <div key={title} className="rounded-2xl border-t-4 border-brand-600 bg-slate-50 p-5">
               <h3 className="font-semibold text-ink">{title}</h3>
               <p className="mt-2 text-sm text-slate-600">{text}</p>
             </div>
@@ -125,9 +130,9 @@ export function Website() {
         </div>
       </section>
 
-      <section id="safeguards" className="scroll-mt-20 bg-slate-50">
+      <section id="safeguards" className="scroll-mt-20 bg-[#f5f8fe]">
         <div className="mx-auto max-w-6xl px-4 py-16">
-          <h2 className="text-3xl font-bold text-ink">Safeguards built in</h2>
+          <h2 className="text-3xl text-ink md:text-4xl">Safeguards built in</h2>
           <p className="mt-2 max-w-2xl text-slate-600">
             Designed with privacy first: only what is needed to authorise a collection, no photos of children, and each
             nursery’s data kept separate.
@@ -135,7 +140,8 @@ export function Website() {
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {SAFEGUARDS.map(([title, text]) => (
               <div key={title} className="card">
-                <h3 className="font-semibold text-ink">{title}</h3>
+                <span className="arch-mark" aria-hidden="true" />
+                <h3 className="mt-3 font-semibold text-ink">{title}</h3>
                 <p className="mt-2 text-sm text-slate-600">{text}</p>
               </div>
             ))}
@@ -144,7 +150,7 @@ export function Website() {
       </section>
 
       <section id="pricing" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-16">
-        <h2 className="text-3xl font-bold text-ink">Priced for a single setting, ready for a group</h2>
+        <h2 className="text-3xl text-ink md:text-4xl">Priced for a single setting, ready for a group</h2>
         <p className="mt-2 max-w-2xl text-slate-600">
           Per setting, per month: adding a child never changes the price. Most settings start with a paid pilot in one room,
           and nobody is asked to pay before the scope is agreed.
@@ -158,10 +164,10 @@ export function Website() {
         <p className="mt-4 text-sm text-slate-500">Paid pilots are invoiced only after the pilot scope has been agreed in writing.</p>
       </section>
 
-      <section id="faq" className="scroll-mt-20 bg-slate-50">
+      <section id="faq" className="scroll-mt-20 bg-[#f5f8fe]">
         <div className="mx-auto max-w-4xl px-4 py-16">
-          <h2 className="text-3xl font-bold text-ink">Questions</h2>
-          <div className="mt-6 divide-y divide-slate-200 rounded-xl bg-white">
+          <h2 className="text-3xl text-ink md:text-4xl">Questions</h2>
+          <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
             {FAQ.map(([q, a]) => (
               <details key={q} className="group p-5">
                 <summary className="cursor-pointer list-none font-semibold text-ink">
@@ -174,13 +180,16 @@ export function Website() {
         </div>
       </section>
 
-      <section id="contact" className="mx-auto max-w-4xl scroll-mt-20 px-4 py-16">
-        <h2 className="text-3xl font-bold text-ink">Talk to us</h2>
-        <p className="mt-2 text-slate-600">
+      <section id="contact" className="mx-auto max-w-5xl scroll-mt-20 px-4 py-16">
+        <div className="blue-panel rounded-3xl px-5 py-10 shadow-[0_40px_80px_-40px_rgb(29_78_216/0.6)] sm:px-10">
+        <p className="text-xs font-bold tracking-widest text-blue-200">BOOK A DEMO</p>
+        <h2 className="mt-2 text-3xl text-white">Talk to us</h2>
+        <p className="mt-2 max-w-2xl text-blue-100">
           Tell us about your setting. We will reply within two working days, and can show you a demo first. We
           never ask for children’s or families’ details by email.
         </p>
         <Enquiry />
+        </div>
       </section>
     </SiteLayout>
   )
@@ -188,16 +197,16 @@ export function Website() {
 
 function Price({ name, price, unit, items, featured }: { name: string; price: string; unit: string; items: string[]; featured?: boolean }) {
   return (
-    <div className={`card flex flex-col ${featured ? 'ring-2 ring-brand-500' : ''}`}>
+    <div className={`card flex flex-col ${featured ? 'border-brand-600 shadow-[0_30px_60px_-30px_rgb(37_99_235/0.45)] ring-2 ring-brand-600' : ''}`}>
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-ink">{name}</h3>
-        {featured && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Most complete</span>}
+        {featured && <span className="rounded-full bg-gradient-to-r from-brand-600 to-brand-500 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">Most complete</span>}
       </div>
       <p className="mt-3 text-3xl font-bold text-ink">{price}</p>
       <p className="text-xs text-slate-500">{unit}</p>
       <ul className="mt-4 space-y-2 text-sm text-slate-600">
         {items.map((item) => (
-          <li key={item}>✓ {item}</li>
+          <li key={item}><span className="font-bold text-brand-600">✓</span> {item}</li>
         ))}
       </ul>
     </div>

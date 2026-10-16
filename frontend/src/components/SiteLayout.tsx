@@ -13,32 +13,34 @@ const LINKS = [
 export function SiteLayout({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="min-h-screen bg-white text-slate-800">
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-          <Link to="/" className="flex items-center gap-2">
-            <img src="/favicon.svg" alt="" className="size-9 rounded-lg" />
+    <div className="site min-h-screen bg-white text-slate-800">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 sm:gap-4">
+          <Link to="/" className="flex shrink-0 items-center gap-2">
+            <img src="/favicon.svg" alt="" className="size-8 rounded-[9px] sm:size-9" />
             <span className="leading-tight">
-              <span className="block text-sm font-bold text-ink">ENTRACCESS UK</span>
-              <span className="block text-xs text-slate-500">Collector</span>
+              <span className="block whitespace-nowrap font-display text-[0.85rem] font-extrabold tracking-wide text-ink sm:text-[0.95rem]">
+                ENTRACCESS <span className="text-brand-600">UK</span>
+              </span>
+              <span className="block text-xs font-medium text-slate-500">Collector</span>
             </span>
           </Link>
-          <nav className="ml-auto hidden items-center gap-5 text-sm md:flex">
+          <nav className="ml-auto hidden items-center gap-6 text-sm font-medium lg:flex">
             {LINKS.map((l) => (
-              <a key={l.href} href={l.href} className="text-slate-600 hover:text-ink">
+              <a key={l.href} href={l.href} className="whitespace-nowrap text-slate-600 hover:text-ink">
                 {l.label}
               </a>
             ))}
           </nav>
-          <a href="/#contact" className="btn btn-primary ml-auto md:ml-0">
+          <a href="/#contact" className="btn btn-primary ml-auto whitespace-nowrap px-3 text-xs sm:px-4 sm:text-sm lg:ml-0">
             Book a demo
           </a>
-          <button className="rounded-md p-2 md:hidden" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <button className="rounded-full p-2 text-slate-600 lg:hidden" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(!open)}>
             ☰
           </button>
         </div>
         {open && (
-          <nav className="border-t border-slate-200 px-4 py-2 md:hidden">
+          <nav className="border-t border-slate-200 px-4 py-2 lg:hidden">
             {LINKS.map((l) => (
               <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="block py-2 text-slate-700">
                 {l.label}
@@ -48,10 +50,12 @@ export function SiteLayout({ children }: { children: ReactNode }) {
         )}
       </header>
       <main>{children}</main>
-      <footer className="bg-ink text-slate-300">
+      <footer className="border-t-[3px] border-brand-600 bg-midnight text-slate-300">
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 text-sm md:grid-cols-2">
           <div>
-            <p className="font-semibold text-white">ENTRACCESS UK Collector</p>
+            <p className="font-display font-extrabold tracking-wide text-white">
+              ENTRACCESS <span className="text-brand-500">UK</span> Collector
+            </p>
             <p className="mt-1">Every handover, authorised. Safe, recorded child collection for UK nurseries.</p>
           </div>
           <div className="space-y-1">
