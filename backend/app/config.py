@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = DEV_SECRET
     PASS_SIGNING_KEY: str = DEV_PASS_KEY
     SESSION_HOURS: int = 12
+    # A parent's own phone, opened like an app: signing in twice a day would
+    # be the reason they stopped using it. Staff and company sessions keep the
+    # short one, because those devices are shared.
+    PARENT_SESSION_DAYS: int = 30
 
     # The nursery's local time decides what "today" means for a daily code and
     # for a one-off collection on a given date.

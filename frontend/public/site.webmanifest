@@ -1,0 +1,33 @@
+{
+  "id": "/app/site",
+  "name": "ENTRACCESS UK Collector",
+  "short_name": "Collector",
+  "description": "Safe, recorded child collection for UK nurseries.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "en-GB",
+  "icons": [
+    {
+      "src": "/icons/icon-site-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-site-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-site-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -18,6 +18,29 @@ declare global {
   }
 }
 
+/** Reads QR codes off video frames, with whatever this browser can do. */
+async function frameReader(): Promise<(frame: HTMLVideoElement) => Promise<string[]>> {
+  if (window.BarcodeDetector) {
+    const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
+    return async (frame) => (await detector.detect(frame)).map((code) => code.rawValue)
+  }
+  // Loaded only when the camera opens, so nobody else downloads it.
+  const { default: jsQR } = await import('jsqr')
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  return async (frame) => {
+    if (!context || !frame.videoWidth) return []
+    // A pass needs nowhere near full resolution, and a smaller frame decodes fast.
+    const scale = Math.min(1, 640 / frame.videoWidth)
+    canvas.width = Math.round(frame.videoWidth * scale)
+    canvas.height = Math.round(frame.videoHeight * scale)
+    context.drawImage(frame, 0, 0, canvas.width, canvas.height)
+    const image = context.getImageData(0, 0, canvas.width, canvas.height)
+    const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' })
+    return code ? [code.data] : []
+  }
+}
+
 /** Where this phone is, when the nursery has a geofence; nothing otherwise. */
 async function where(fenced: boolean) {
   return fenced ? { position: await currentPosition() } : {}
@@ -72,7 +95,9 @@ function ScanPass({ fenced, onChecked }: { fenced: boolean; onChecked: (check: C
   const [error, setError] = useState<string | null>(null)
   const [camera, setCamera] = useState(false)
   const video = useRef<HTMLVideoElement>(null)
-  const supported = typeof window !== 'undefined' && Boolean(window.BarcodeDetector)
+  // Any phone with a camera: the browser's own detector where there is one
+  // (Chrome), jsQR on the video frames everywhere else (Safari, iPhone).
+  const supported = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
 
   const submit = async (value: string) => {
     setError(null)
@@ -86,28 +111,27 @@ function ScanPass({ fenced, onChecked }: { fenced: boolean; onChecked: (check: C
   }
 
   useEffect(() => {
-    if (!camera || !window.BarcodeDetector) return
+    if (!camera) return
     let stream: MediaStream | null = null
     let stopped = false
-    const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
     ;(async () => {
       try {
+        const read = await frameReader()
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
         if (!video.current) return
         video.current.srcObject = stream
         await video.current.play()
         while (!stopped) {
-          const codes = await detector.detect(video.current).catch(() => [])
-          const found = codes.find((c) => c.rawValue.startsWith('CP1.'))
+          const found = (await read(video.current).catch(() => [])).find((value) => value.startsWith('CP1.'))
           if (found) {
             stopped = true
-            await submit(found.rawValue)
+            await submit(found)
             break
           }
-          await new Promise((resolve) => setTimeout(resolve, 250))
+          await new Promise((resolve) => setTimeout(resolve, 200))
         }
       } catch {
-        setError('Could not open the camera. Type or paste the pass instead.')
+        setError('Could not open the camera. Allow camera access, or type or paste the pass instead.')
         setCamera(false)
       }
     })()
@@ -126,8 +150,8 @@ function ScanPass({ fenced, onChecked }: { fenced: boolean; onChecked: (check: C
           {camera ? (
             <video ref={video} className="aspect-square w-full rounded-lg bg-black object-cover" muted playsInline />
           ) : (
-            <button className="btn btn-primary w-full" onClick={() => setCamera(true)}>
-              Open camera
+            <button className="btn btn-primary w-full py-3 text-base" onClick={() => setCamera(true)}>
+              Scan with the camera
             </button>
           )}
         </>

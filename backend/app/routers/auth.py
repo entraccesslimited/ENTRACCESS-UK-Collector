@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 
 from app.config import get_settings
 from app.deps import SessionDep
-from app.models import Nursery, Operator, User
+from app.models import Nursery, Operator, Role, User
 from app.schemas import Me, SignIn
 from app.security import (
     COOKIE_NAME,
@@ -60,12 +60,12 @@ def _operator_me(operator: Operator) -> Me:
     )
 
 
-def _set_cookie(response: Response, token: str) -> None:
+def _set_cookie(response: Response, token: str, lifetime: timedelta | None = None) -> None:
     settings = get_settings()
     response.set_cookie(
         COOKIE_NAME,
         token,
-        max_age=settings.SESSION_HOURS * 3600,
+        max_age=int((lifetime or timedelta(hours=settings.SESSION_HOURS)).total_seconds()),
         httponly=True,
         samesite="strict",
         secure=settings.secure_cookies,
@@ -108,7 +108,8 @@ async def sign_in(body: SignIn, response: Response, session: SessionDep) -> Me:
             status.HTTP_403_FORBIDDEN,
             "This nursery's account is suspended. Please contact ENTRACCESS UK.",
         )
-    _set_cookie(response, issue_session(account.id, USER))
+    lifetime = timedelta(days=get_settings().PARENT_SESSION_DAYS) if account.role is Role.PARENT else None
+    _set_cookie(response, issue_session(account.id, USER, lifetime=lifetime), lifetime)
     return _me(account, nursery)
 
 

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { Layout } from '@/components/Layout'
@@ -28,7 +29,20 @@ function Guard({ roles, children }: { roles: Role[]; children: JSX.Element }) {
   return children
 }
 
+declare global {
+  interface Window {
+    entraccessApp?: { update: () => void }
+  }
+}
+
 export function App() {
+  const location = useLocation()
+  // Each portal is its own installable app; public/app-manifest.js picks
+  // which one this address belongs to, and runs again on every navigation.
+  useEffect(() => {
+    window.entraccessApp?.update()
+  }, [location.pathname, location.search])
+
   return (
     <Routes>
       <Route path="/" element={<Website />} />
