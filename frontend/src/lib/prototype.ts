@@ -148,8 +148,10 @@ export function startingWorld(): World {
     { id: 'dev', name: 'Dev Shah', childIds: ['leo', 'maya'] },
     { id: 'sarah', name: 'Sarah Evans', childIds: ['ruby'] },
   ]
+  // Fixed ids, with the fixed key below, so a sample collector's pass shown on
+  // one device scans on another: a laptop showing the pass, a phone at the door.
   const regular = (childId: string, name: string, relationship: string, by: string, phone: string): Collector => ({
-    id: uid('c'),
+    id: `${childId}-${name.split(' ')[0].toLowerCase()}`,
     childId,
     name,
     relationship,
@@ -196,11 +198,18 @@ export function releasedToday(world: World, childId: string): Handover | undefin
 
 // ---------------------------------------------------------------- signing
 //
-// A pass is CP1.<payload>.<signature>, HMAC-SHA256 with a key made for this
-// visit, so a pass from another visit, or one altered by a byte, is refused
-// exactly as the live app refuses one from another nursery.
+// A pass is CP1.<payload>.<signature>, HMAC-SHA256. The key is the same in
+// every browser, so the sample collectors' passes scan from one device to
+// another; a pass altered by a byte is still refused, exactly as the live app
+// refuses one from another nursery. It is a demo key and protects nothing.
 
-const KEY = crypto.subtle.generateKey({ name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'])
+const KEY = crypto.subtle.importKey(
+  'raw',
+  new TextEncoder().encode('entraccess-uk-collector-prototype-demo-key'),
+  { name: 'HMAC', hash: 'SHA-256' },
+  false,
+  ['sign', 'verify'],
+)
 const enc = new TextEncoder()
 const b64 = (bytes: ArrayBuffer | Uint8Array) =>
   btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')

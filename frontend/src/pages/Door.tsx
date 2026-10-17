@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 
+import { CameraScan, cameraSupported } from '@/components/CameraScan'
 import { Alert, PageTitle } from '@/components/ui'
 import { api } from '@/lib/api'
 import { day } from '@/lib/format'
@@ -8,38 +9,6 @@ import { useLoad } from '@/lib/useLoad'
 import type { Check, Child, Handover } from '@/lib/types'
 
 type Mode = 'scan' | 'code'
-
-interface BarcodeDetectorLike {
-  detect(source: CanvasImageSource): Promise<{ rawValue: string }[]>
-}
-declare global {
-  interface Window {
-    BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike
-  }
-}
-
-/** Reads QR codes off video frames, with whatever this browser can do. */
-async function frameReader(): Promise<(frame: HTMLVideoElement) => Promise<string[]>> {
-  if (window.BarcodeDetector) {
-    const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
-    return async (frame) => (await detector.detect(frame)).map((code) => code.rawValue)
-  }
-  // Loaded only when the camera opens, so nobody else downloads it.
-  const { default: jsQR } = await import('jsqr')
-  const canvas = document.createElement('canvas')
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  return async (frame) => {
-    if (!context || !frame.videoWidth) return []
-    // A pass needs nowhere near full resolution, and a smaller frame decodes fast.
-    const scale = Math.min(1, 640 / frame.videoWidth)
-    canvas.width = Math.round(frame.videoWidth * scale)
-    canvas.height = Math.round(frame.videoHeight * scale)
-    context.drawImage(frame, 0, 0, canvas.width, canvas.height)
-    const image = context.getImageData(0, 0, canvas.width, canvas.height)
-    const code = jsQR(image.data, image.width, image.height, { inversionAttempts: 'dontInvert' })
-    return code ? [code.data] : []
-  }
-}
 
 /** Where this phone is, when the nursery has a geofence; nothing otherwise. */
 async function where(fenced: boolean) {
@@ -94,10 +63,7 @@ function ScanPass({ fenced, onChecked }: { fenced: boolean; onChecked: (check: C
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [camera, setCamera] = useState(false)
-  const video = useRef<HTMLVideoElement>(null)
-  // Any phone with a camera: the browser's own detector where there is one
-  // (Chrome), jsQR on the video frames everywhere else (Safari, iPhone).
-  const supported = typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
+  const supported = cameraSupported()
 
   const submit = async (value: string) => {
     setError(null)
@@ -110,37 +76,6 @@ function ScanPass({ fenced, onChecked }: { fenced: boolean; onChecked: (check: C
     }
   }
 
-  useEffect(() => {
-    if (!camera) return
-    let stream: MediaStream | null = null
-    let stopped = false
-    ;(async () => {
-      try {
-        const read = await frameReader()
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-        if (!video.current) return
-        video.current.srcObject = stream
-        await video.current.play()
-        while (!stopped) {
-          const found = (await read(video.current).catch(() => [])).find((value) => value.startsWith('CP1.'))
-          if (found) {
-            stopped = true
-            await submit(found)
-            break
-          }
-          await new Promise((resolve) => setTimeout(resolve, 200))
-        }
-      } catch {
-        setError('Could not open the camera. Allow camera access, or type or paste the pass instead.')
-        setCamera(false)
-      }
-    })()
-    return () => {
-      stopped = true
-      stream?.getTracks().forEach((track) => track.stop())
-    }
-    // One scan session per camera opening; submit does not need to restart it.
-  }, [camera])
 
   return (
     <div className="card max-w-md space-y-4">
@@ -148,7 +83,17 @@ function ScanPass({ fenced, onChecked }: { fenced: boolean; onChecked: (check: C
       {supported && (
         <>
           {camera ? (
-            <video ref={video} className="aspect-square w-full rounded-lg bg-black object-cover" muted playsInline />
+            <CameraScan
+              onFound={(value) => {
+                setCamera(false)
+                void submit(value)
+              }}
+              onError={(message) => {
+                setError(message)
+                setCamera(false)
+              }}
+              onClose={() => setCamera(false)}
+            />
           ) : (
             <button className="btn btn-primary w-full py-3 text-base" onClick={() => setCamera(true)}>
               Scan with the camera

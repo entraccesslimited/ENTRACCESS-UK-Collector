@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 
+import { CameraScan, cameraSupported } from '@/components/CameraScan'
 import { SiteLayout } from '@/components/SiteLayout'
 import { QR } from '@/components/ui'
 import {
@@ -488,6 +489,8 @@ function DoorPanel({
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  const [camera, setCamera] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
 
   const noteResult = (k: DoorCheck) => {
     if (k.result === 'revoked') prove('removed')
@@ -563,6 +566,35 @@ function DoorPanel({
           Enter code
         </button>
       </div>
+      {mode === 'pass' && cameraSupported() && (
+        <div className="mb-3">
+          {camera ? (
+            <CameraScan
+              onFound={async (value) => {
+                setCamera(false)
+                setToken(value)
+                begin(await checkPass(world, value))
+              }}
+              onError={(message) => {
+                setCameraError(message)
+                setCamera(false)
+              }}
+              onClose={() => setCamera(false)}
+            />
+          ) : (
+            <>
+              <button className="btn btn-primary w-full py-3 text-base" onClick={() => { setCameraError(null); setCamera(true) }}>
+                Scan with the camera
+              </button>
+              <p className="mt-1 text-xs text-slate-500">
+                Open this page on a second device too: show a pass there under “What the collector has”, and scan it here.
+                The sample collectors’ passes work across devices.
+              </p>
+            </>
+          )}
+          {cameraError && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{cameraError}</p>}
+        </div>
+      )}
       {mode === 'pass' ? (
         <form onSubmit={runPass} className="space-y-2">
           <textarea
