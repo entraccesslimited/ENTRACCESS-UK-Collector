@@ -36,6 +36,7 @@ export const STATUS_LABEL: Record<CheckResult, string> = {
   not_yet_valid: 'Starts later',
   expired: 'Ended',
   already_used: 'Used',
+  already_collected: 'Already collected',
   wrong_code: 'Wrong code',
   locked: 'Paused',
   outside_geofence: 'Off site',

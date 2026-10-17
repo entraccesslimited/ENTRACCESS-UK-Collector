@@ -108,7 +108,9 @@ async def sign_in(body: SignIn, response: Response, session: SessionDep) -> Me:
             status.HTTP_403_FORBIDDEN,
             "This nursery's account is suspended. Please contact ENTRACCESS UK.",
         )
-    lifetime = timedelta(days=get_settings().PARENT_SESSION_DAYS) if account.role is Role.PARENT else None
+    lifetime = (
+        timedelta(days=get_settings().PARENT_SESSION_DAYS) if account.role is Role.PARENT else None
+    )
     _set_cookie(response, issue_session(account.id, USER, lifetime=lifetime), lifetime)
     return _me(account, nursery)
 

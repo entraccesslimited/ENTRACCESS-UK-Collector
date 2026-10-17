@@ -70,6 +70,10 @@ def local_date(nursery: Nursery, moment: datetime) -> date:
     return _aware(moment).astimezone(zone(nursery)).date()
 
 
+def local_time(nursery: Nursery, moment: datetime) -> datetime:
+    return _aware(moment).astimezone(zone(nursery))
+
+
 def day_bounds(nursery: Nursery, day: date) -> tuple[datetime, datetime]:
     tz = zone(nursery)
     start = datetime.combine(day, time.min, tzinfo=tz)
@@ -406,8 +410,44 @@ async def check_pass(
         return await _record(
             session, staff, method=CheckMethod.PASS, result=CheckResult.REISSUED, auth=auth, **where
         )
-    result = status_of(auth, datetime.now(UTC))
+    now = datetime.now(UTC)
+    result = await _unless_collected(session, staff, auth, status_of(auth, now), now)
     return await _record(session, staff, method=CheckMethod.PASS, result=result, auth=auth, **where)
+
+
+async def released_today(
+    session: AsyncSession, nursery: Nursery, child_id: uuid.UUID, now: datetime
+) -> Handover | None:
+    """The handover that already released this child today, if there is one.
+
+    "Today" is the nursery's own day. A refusal does not count: the child is
+    still at the nursery after one.
+    """
+    start, end = day_bounds(nursery, local_date(nursery, now))
+    found: Handover | None = await session.scalar(
+        select(Handover)
+        .where(
+            Handover.child_id == child_id,
+            Handover.outcome == HandoverOutcome.RELEASED,
+            Handover.occurred_at >= start,
+            Handover.occurred_at <= end,
+        )
+        .order_by(Handover.occurred_at.desc())
+        .limit(1)
+    )
+    return found
+
+
+async def _unless_collected(
+    session: AsyncSession, staff: User, auth: Authorisation, result: CheckResult, now: datetime
+) -> CheckResult:
+    """A valid collector is still refused for a child who has already gone home."""
+    if result is not CheckResult.VALID:
+        return result
+    nursery = await nursery_of(session, staff)
+    if await released_today(session, nursery, auth.child_id, now) is not None:
+        return CheckResult.ALREADY_COLLECTED
+    return result
 
 
 async def _recent_wrong_codes(session: AsyncSession, child_id: uuid.UUID) -> int:
@@ -468,7 +508,7 @@ async def check_code(
                 session,
                 staff,
                 method=CheckMethod.CODE,
-                result=status_of(auth, now),
+                result=await _unless_collected(session, staff, auth, status_of(auth, now), now),
                 auth=auth,
                 **where,
             )
@@ -514,6 +554,18 @@ async def decide(
             "This collector stopped being authorised after the check. Do not release the child.",
             status=409,
         )
+    if release:
+        # Checked again here, not only at the door check: two members of staff
+        # can check two collectors for the same child a minute apart.
+        nursery = await nursery_of(session, staff)
+        earlier = await released_today(session, nursery, child.id, now)
+        if earlier is not None:
+            raise CollectionError(
+                f"{child.full_name} was already collected at "
+                f"{local_time(nursery, earlier.occurred_at):%H:%M} by "
+                f"{earlier.collector_name}. Do not release.",
+                status=409,
+            )
     if not release and not (reason or "").strip():
         raise CollectionError("Say why the child was not released.")
 

@@ -13,7 +13,9 @@ async def _cookie_max_age(app: object, email: str) -> int:
         base_url="http://test",
         headers={"X-Requested-With": "fetch"},
     ) as client:
-        response = await client.post("/api/auth/sign-in", json={"email": email, "password": PASSWORD})
+        response = await client.post(
+            "/api/auth/sign-in", json={"email": email, "password": PASSWORD}
+        )
         assert response.status_code == 200, response.text
         header = response.headers["set-cookie"]
         return int(header.split("Max-Age=")[1].split(";")[0])

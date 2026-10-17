@@ -98,6 +98,9 @@ class CheckResult(enum.StrEnum):
     NOT_YET_VALID = "not_yet_valid"
     EXPIRED = "expired"
     ALREADY_USED = "already_used"
+    # The child was already released today, to this collector or another.
+    # Stops a second collector being handed a child who has already gone.
+    ALREADY_COLLECTED = "already_collected"
     WRONG_CODE = "wrong_code"
     LOCKED = "locked"
     # The nursery has a geofence and the phone was outside it, or gave no position.

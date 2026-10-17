@@ -10,6 +10,7 @@ export type CheckResult =
   | 'not_yet_valid'
   | 'expired'
   | 'already_used'
+  | 'already_collected'
   | 'wrong_code'
   | 'locked'
   | 'outside_geofence'

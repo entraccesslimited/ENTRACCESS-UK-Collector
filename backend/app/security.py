@@ -48,7 +48,9 @@ USER = "user"
 OPERATOR = "operator"
 
 
-def issue_session(subject_id: uuid.UUID, kind: str = USER, *, lifetime: timedelta | None = None) -> str:
+def issue_session(
+    subject_id: uuid.UUID, kind: str = USER, *, lifetime: timedelta | None = None
+) -> str:
     """A session for a nursery's user, or for a company operator.
 
     The kind is signed into the token, so a nursery user's session can never

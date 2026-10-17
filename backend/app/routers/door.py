@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app import collection, geofence
 from app.deps import SessionDep, StaffUser
-from app.models import Authorisation, CheckResult, Child, DoorCheck, User
+from app.models import Authorisation, CheckResult, Child, DoorCheck, Nursery, User
 from app.schemas import (
     CheckOut,
     ChildOut,
@@ -33,6 +33,7 @@ MESSAGES: dict[CheckResult, str] = {
     CheckResult.NOT_YET_VALID: "This collector is not authorised yet. Do not release.",
     CheckResult.EXPIRED: "This authorisation has ended. Do not release the child.",
     CheckResult.ALREADY_USED: "This one-off pass has already been used. Do not release.",
+    CheckResult.ALREADY_COLLECTED: "This child has already been collected today. Do not release.",
     CheckResult.WRONG_CODE: "That code does not match any collector for this child.",
     CheckResult.LOCKED: "Too many wrong codes for this child. Call the parent.",
     CheckResult.OUTSIDE_GEOFENCE: (
@@ -64,6 +65,18 @@ async def _out(session: SessionDep, check: DoorCheck) -> CheckOut:
         out.child_id = child.id
         out.child_name = child.full_name
         out.room = child.room
+        if check.result is CheckResult.ALREADY_COLLECTED:
+            # Say when and to whom, so staff can tell the person at the door.
+            nursery = await session.get(Nursery, child.nursery_id)
+            assert nursery is not None
+            earlier = await collection.released_today(session, nursery, child.id, check.checked_at)
+            if earlier is not None:
+                when = collection.local_time(nursery, earlier.occurred_at)
+                out.message = (
+                    f"{child.full_name} was already collected at "
+                    f"{when:%H:%M} by {earlier.collector_name} "
+                    f"({earlier.collector_relationship}). Do not release."
+                )
     auth = (
         await session.get(Authorisation, check.authorisation_id) if check.authorisation_id else None
     )

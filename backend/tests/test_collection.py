@@ -478,3 +478,112 @@ class TestGeofence:
     async def test_a_silly_radius_is_refused(self, as_admin: AsyncClient) -> None:
         r = await as_admin.put("/api/admin/geofence", json={**self.SITE, "radius_m": 10})
         assert r.status_code == 422
+
+
+class TestAChildGoesHomeOnce:
+    """Once a child is released, nobody else can be handed them that day.
+
+    Without this, the mother collects at 15:00 and the father's own valid pass
+    still reads "Authorised" at 15:05 — and the record says the child left
+    with both of them.
+    """
+
+    @staticmethod
+    async def _release(as_staff: AsyncClient, token: str) -> None:
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        assert check["result"] == "valid", check
+        decision = await as_staff.post(
+            f"/api/door/checks/{check['check_id']}/decision", json={"release": True}
+        )
+        assert decision.status_code == 200, decision.text
+
+    async def test_a_second_collector_is_refused_and_told_who_took_the_child(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient
+    ) -> None:
+        first = await add_regular(as_parent, world.child.id)
+        second = await add_regular(
+            as_parent, world.child.id, collector_name="Dan Dad", collector_relationship="Father"
+        )
+        await self._release(as_staff, (await pass_of(as_parent, first["id"]))["token"])
+
+        token = (await pass_of(as_parent, second["id"]))["token"]
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        assert check["result"] == "already_collected"
+        assert check["can_release"] is False
+        assert "already collected at" in check["message"]
+        assert "Grace Grandma (Grandparent)" in check["message"]
+
+        code = (await pass_of(as_parent, second["id"]))["code_today"]
+        by_code = (
+            await as_staff.post(
+                "/api/door/check/code", json={"child_id": str(world.child.id), "code": code}
+            )
+        ).json()
+        assert by_code["result"] == "already_collected"
+
+    async def test_two_valid_checks_cannot_both_release(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient, session: AsyncSession
+    ) -> None:
+        """Two staff check two collectors a minute apart; only the first release stands."""
+        first = await add_regular(as_parent, world.child.id)
+        second = await add_regular(
+            as_parent, world.child.id, collector_name="Dan Dad", collector_relationship="Father"
+        )
+        checks = []
+        for auth in (first, second):
+            token = (await pass_of(as_parent, auth["id"]))["token"]
+            check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+            assert check["result"] == "valid"
+            checks.append(check)
+
+        ok = await as_staff.post(
+            f"/api/door/checks/{checks[0]['check_id']}/decision", json={"release": True}
+        )
+        assert ok.status_code == 200
+        late = await as_staff.post(
+            f"/api/door/checks/{checks[1]['check_id']}/decision", json={"release": True}
+        )
+        assert late.status_code == 409
+        assert "already collected" in late.json()["detail"]
+        released = await session.scalar(
+            select(func.count()).select_from(Handover).where(Handover.child_id == world.child.id)
+        )
+        assert released == 1
+
+    async def test_a_refusal_does_not_count_as_collected(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient
+    ) -> None:
+        auth = await add_regular(as_parent, world.child.id)
+        token = (await pass_of(as_parent, auth["id"]))["token"]
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        refused = await as_staff.post(
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": False, "reason": "No photo ID"},
+        )
+        assert refused.status_code == 200
+        again = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        assert again["result"] == "valid"
+
+    async def test_yesterdays_collection_does_not_block_today(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient, session: AsyncSession
+    ) -> None:
+        auth = await add_regular(as_parent, world.child.id)
+        token = (await pass_of(as_parent, auth["id"]))["token"]
+        await self._release(as_staff, token)
+        handover = await session.scalar(select(Handover).where(Handover.child_id == world.child.id))
+        assert handover is not None
+        handover.occurred_at = datetime.now(UTC) - timedelta(days=1)
+        await session.commit()
+
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        assert check["result"] == "valid"
+
+    async def test_a_sibling_is_unaffected(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient
+    ) -> None:
+        mine = await add_regular(as_parent, world.child.id)
+        theirs = await add_regular(as_parent, world.sibling.id)
+        await self._release(as_staff, (await pass_of(as_parent, mine["id"]))["token"])
+        token = (await pass_of(as_parent, theirs["id"]))["token"]
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        assert check["result"] == "valid"
