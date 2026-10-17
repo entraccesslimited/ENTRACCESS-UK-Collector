@@ -27,7 +27,7 @@ export type Result =
 export const MESSAGES: Record<Result, string> = {
   valid: "Authorised. Check the collector's ID, then release or refuse.",
   unreadable: 'That is not a collector pass. Do not release the child.',
-  wrong_nursery: 'This pass was not issued by this nursery, or has been altered. Do not release.',
+  wrong_nursery: 'This pass was not issued by this nursery. Do not release.',
   revoked: 'The parent has removed this collector. Do not release the child.',
   reissued: 'This is an old pass that has been replaced. Do not release.',
   not_yet_valid: 'This collector is not authorised yet. Do not release.',

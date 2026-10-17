@@ -233,6 +233,7 @@ function EnterCode({ fenced, onChecked }: { fenced: boolean; onChecked: (check: 
 function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Handover) => void; onBack: () => void }) {
   const [refusing, setRefusing] = useState(false)
   const [reason, setReason] = useState('')
+  const [idChecked, setIdChecked] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -243,7 +244,7 @@ function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Han
       onDecided(
         await api<Handover>(`/door/checks/${check.check_id}/decision`, {
           method: 'POST',
-          json: { release, reason: release ? null : reason },
+          json: { release, reason: release ? null : reason, id_checked: release && idChecked },
         }),
       )
     } catch (err) {
@@ -312,14 +313,19 @@ function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Han
         </dl>
       )}
 
-      {check.can_release && (
-        <p className="mt-4 rounded-lg bg-slate-100 p-2 text-sm">Check photo ID matches the collector’s name before releasing.</p>
+      {check.can_release && !refusing && (
+        <label className="mt-4 flex items-start gap-3 rounded-lg bg-slate-100 p-3 text-sm">
+          <input type="checkbox" className="mt-0.5 size-5 shrink-0" checked={idChecked} onChange={(e) => setIdChecked(e.target.checked)} />
+          <span>
+            <b>Photo ID seen, or I know this collector.</b> Check the name matches before releasing. This is recorded with the handover.
+          </span>
+        </label>
       )}
 
       <div className="mt-5 flex flex-wrap gap-2">
         {check.can_release && !refusing && (
           <>
-            <button className="btn btn-success" disabled={busy} onClick={() => decide(true)}>
+            <button className="btn btn-success" disabled={busy || !idChecked} onClick={() => decide(true)}>
               Release {check.child_name?.split(' ')[0]}
             </button>
             <button className="btn btn-secondary" disabled={busy} onClick={() => setRefusing(true)}>

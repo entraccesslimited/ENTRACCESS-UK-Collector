@@ -95,7 +95,15 @@ export interface Handover {
   staff_name: string
   outcome: 'released' | 'refused'
   refusal_reason: string | null
+  id_checked: boolean
   occurred_at: string
+}
+
+export interface Activity {
+  at: string
+  who: string
+  what: string
+  kind: string
 }
 
 export interface DoorCheck {

@@ -71,7 +71,8 @@ class TestTheWholeJourney:
         assert check["authorised_by_name"] == "Priya Parent"
 
         decision = await as_staff.post(
-            f"/api/door/checks/{check['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         assert decision.status_code == 200, decision.text
         handover = decision.json()
@@ -142,8 +143,12 @@ class TestTheWholeJourney:
         token = (await pass_of(as_parent, auth["id"]))["token"]
         check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
         url = f"/api/door/checks/{check['check_id']}/decision"
-        assert (await as_staff.post(url, json={"release": True})).status_code == 200
-        assert (await as_staff.post(url, json={"release": True})).status_code == 409
+        assert (
+            await as_staff.post(url, json={"release": True, "id_checked": True})
+        ).status_code == 200
+        assert (
+            await as_staff.post(url, json={"release": True, "id_checked": True})
+        ).status_code == 409
 
 
 class TestRevocationAndReissue:
@@ -167,7 +172,8 @@ class TestRevocationAndReissue:
         assert check["result"] == "valid"
         await as_parent.post(f"/api/parent/collectors/{auth['id']}/revoke")
         decision = await as_staff.post(
-            f"/api/door/checks/{check['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         assert decision.status_code == 409
 
@@ -203,7 +209,8 @@ class TestOneOffCollectors:
         token = (await pass_of(as_parent, auth["id"]))["token"]
         first = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
         await as_staff.post(
-            f"/api/door/checks/{first['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{first['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         second = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
         assert second["result"] == "already_used"
@@ -267,7 +274,8 @@ class TestAtTheDoor:
     async def test_an_invalid_check_cannot_be_released(self, as_staff: AsyncClient) -> None:
         check = (await as_staff.post("/api/door/check/pass", json={"token": "nope"})).json()
         decision = await as_staff.post(
-            f"/api/door/checks/{check['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         assert decision.status_code == 409
 
@@ -334,7 +342,8 @@ class TestTheRecord:
         token = (await pass_of(as_parent, auth["id"]))["token"]
         check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
         await as_staff.post(
-            f"/api/door/checks/{check['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         await as_staff.post("/api/door/check/pass", json={"token": "junk"})
 
@@ -359,7 +368,8 @@ class TestTheRecord:
         token = (await pass_of(as_parent, auth["id"]))["token"]
         check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
         await as_staff.post(
-            f"/api/door/checks/{check['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         # Revoking afterwards leaves the record of who collected exactly as it was.
         await as_parent.post(f"/api/parent/collectors/{auth['id']}/revoke")
@@ -493,7 +503,8 @@ class TestAChildGoesHomeOnce:
         check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
         assert check["result"] == "valid", check
         decision = await as_staff.post(
-            f"/api/door/checks/{check['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         assert decision.status_code == 200, decision.text
 
@@ -537,11 +548,13 @@ class TestAChildGoesHomeOnce:
             checks.append(check)
 
         ok = await as_staff.post(
-            f"/api/door/checks/{checks[0]['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{checks[0]['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         assert ok.status_code == 200
         late = await as_staff.post(
-            f"/api/door/checks/{checks[1]['check_id']}/decision", json={"release": True}
+            f"/api/door/checks/{checks[1]['check_id']}/decision",
+            json={"release": True, "id_checked": True},
         )
         assert late.status_code == 409
         assert "already collected" in late.json()["detail"]
@@ -587,3 +600,62 @@ class TestAChildGoesHomeOnce:
         token = (await pass_of(as_parent, theirs["id"]))["token"]
         check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
         assert check["result"] == "valid"
+
+
+class TestTheIdCheckIsRecorded:
+    async def test_a_release_needs_the_id_check(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient
+    ) -> None:
+        auth = await add_regular(as_parent, world.child.id)
+        token = (await pass_of(as_parent, auth["id"]))["token"]
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        url = f"/api/door/checks/{check['check_id']}/decision"
+
+        unchecked = await as_staff.post(url, json={"release": True})
+        assert unchecked.status_code == 400
+        assert "ID check" in unchecked.json()["detail"]
+
+        released = await as_staff.post(url, json={"release": True, "id_checked": True})
+        assert released.status_code == 200
+        assert released.json()["id_checked"] is True
+
+    async def test_a_refusal_does_not_need_it(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient
+    ) -> None:
+        auth = await add_regular(as_parent, world.child.id)
+        token = (await pass_of(as_parent, auth["id"]))["token"]
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        refused = await as_staff.post(
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": False, "reason": "No photo ID"},
+        )
+        assert refused.status_code == 200
+        assert refused.json()["id_checked"] is False
+
+    async def test_the_export_and_the_activity_log_show_it(
+        self, world: World, as_parent: AsyncClient, as_staff: AsyncClient, as_admin: AsyncClient
+    ) -> None:
+        auth = await add_regular(as_parent, world.child.id)
+        token = (await pass_of(as_parent, auth["id"]))["token"]
+        check = (await as_staff.post("/api/door/check/pass", json={"token": token})).json()
+        await as_staff.post(
+            f"/api/door/checks/{check['check_id']}/decision",
+            json={"release": True, "id_checked": True},
+        )
+
+        exported = (await as_admin.get("/api/admin/handovers.csv")).text.splitlines()
+        assert "id_checked" in exported[0]
+        assert exported[1].split(",")[-2] == "yes"
+
+        timeline = (await as_admin.get("/api/admin/activity")).json()
+        whats = [a["what"] for a in timeline]
+        assert any(
+            "Released Maya Parent to Grace Grandma" in w and "ID checked" in w for w in whats
+        )
+        assert any(w.startswith("Added a collector") for w in whats)
+        # Newest first: the release came after the collector was added.
+        kinds = [a["kind"] for a in timeline]
+        assert kinds.index("handover") < kinds.index("authorisation")
+
+    async def test_staff_cannot_read_the_activity_log(self, as_staff: AsyncClient) -> None:
+        assert (await as_staff.get("/api/admin/activity")).status_code == 403

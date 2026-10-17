@@ -529,6 +529,7 @@ async def decide(
     *,
     release: bool,
     reason: str | None,
+    id_checked: bool = False,
 ) -> Handover:
     check = await session.scalar(
         select(DoorCheck).where(DoorCheck.id == check_id, DoorCheck.nursery_id == staff.nursery_id)
@@ -566,6 +567,10 @@ async def decide(
                 f"{earlier.collector_name}. Do not release.",
                 status=409,
             )
+    if release and not id_checked:
+        raise CollectionError(
+            "Confirm the ID check first: photo ID seen, or the collector is known to you."
+        )
     if not release and not (reason or "").strip():
         raise CollectionError("Say why the child was not released.")
 
@@ -582,6 +587,7 @@ async def decide(
         authorised_by_name=parent.full_name if parent else "Unknown",
         staff_id=staff.id,
         staff_name=staff.full_name,
+        id_checked=id_checked,
         occurred_at=now,
     )
     session.add(handover)

@@ -130,6 +130,11 @@ async def decide(
     check_id: uuid.UUID, body: DecisionIn, staff: StaffUser, session: SessionDep
 ) -> HandoverOut:
     handover = await collection.decide(
-        session, staff, check_id, release=body.release, reason=body.reason
+        session,
+        staff,
+        check_id,
+        release=body.release,
+        reason=body.reason,
+        id_checked=body.id_checked,
     )
     return HandoverOut.model_validate(handover)

@@ -79,8 +79,8 @@ const SCENARIOS: { title: string; steps: string[] }[] = [
   {
     title: 'No smartphone',
     steps: [
-      'Raj Patel, Ruby’s grandfather, has no smartphone. Sarah reads him today’s six-digit code.',
-      'At the door, choose “Enter code”, pick Ruby and type Raj’s code from “What the collector has”.',
+      'Raj Patel, Ruby’s grandfather, has no smartphone. As Sarah, press “Pass & code” on Raj to see the six-digit code she reads him.',
+      'At the door, choose “Enter code”, pick Ruby and type that code.',
       `Try a wrong code ${CODE_LIMIT} times for one child: code entry pauses and staff are told to call the parent.`,
     ],
   },
@@ -119,7 +119,7 @@ export function Prototype() {
           <div className="mt-6 rounded-2xl border border-slate-200 bg-surface p-4 text-sm text-slate-600">
             <b className="text-ink">Sample families only.</b> This runs entirely in your browser: passes are really signed and
             checked here, nothing is sent anywhere, and it all resets when you leave or press Reset. Please don’t type in real
-            names. Texts and emails to parents are shown on screen instead of being sent.
+            names. The emails parents would receive are shown on screen instead of being sent.
           </div>
         </div>
       </section>
@@ -297,6 +297,7 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
                       <Tag result={s} />
                       {c.revokedAt === null && (
                         <>
+                          <CodeReveal collector={c} />
                           <button className="text-xs text-brand-700 underline" onClick={() => reissue(c)}>
                             Send a new pass
                           </button>
@@ -363,6 +364,29 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
   )
 }
 
+/** The parent's “Pass & code”: today's six-digit code, to read to someone without a smartphone. */
+function CodeReveal({ collector }: { collector: Collector }) {
+  const [code, setCode] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    let live = true
+    void codeFor(collector).then((c) => live && setCode(c))
+    return () => {
+      live = false
+    }
+  }, [open, collector, collector.version])
+  return open ? (
+    <span className="rounded-md bg-mist px-2 py-0.5 font-mono text-sm tracking-widest text-ink" title="Today’s code">
+      {code ?? '······'}
+    </span>
+  ) : (
+    <button className="text-xs text-brand-700 underline" onClick={() => setOpen(true)}>
+      Pass &amp; code
+    </button>
+  )
+}
+
 // ---------------------------------------------------------------- collector
 
 function CollectorPanel({ world, onShow }: { world: World; onShow: (token: string) => void }) {
@@ -398,7 +422,7 @@ function CollectorPanel({ world, onShow }: { world: World; onShow: (token: strin
   return (
     <Panel who="COLLECTOR" title="What the collector has">
       <p className="mb-3 text-sm text-slate-600">
-        Each collector gets a link to their pass by text. Without a smartphone, the parent reads them today’s six-digit code.
+        The parent sends each collector a link to their pass, by text or WhatsApp. Someone without a smartphone gets a six-digit code from the parent instead.
       </p>
       <ul className="space-y-1">
         {world.collectors.map((c) => {
@@ -426,9 +450,6 @@ function CollectorPanel({ world, onShow }: { world: World; onShow: (token: strin
           <div className="mt-3">
             <QR text={token} size={170} />
           </div>
-          <p className="mt-3 text-xs text-[#cbd5e1]">
-            Or today’s code: <span className="font-mono text-base tracking-widest text-white">{pass.code}</span>
-          </p>
           {stale && <p className="mt-2 text-xs text-amber-300">This is the pass they were first sent. The parent has since sent a new one.</p>}
           <button className="btn btn-primary mt-3 w-full" onClick={() => onShow(token)}>
             Show at the door

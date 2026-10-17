@@ -11,6 +11,7 @@ import { Website } from '@/pages/Website'
 import { Welcome } from '@/pages/Welcome'
 import type { Role } from '@/lib/types'
 import { AdminChildren } from '@/pages/AdminChildren'
+import { AdminActivity } from '@/pages/AdminActivity'
 import { AdminHandovers } from '@/pages/AdminHandovers'
 import { AdminPeople } from '@/pages/AdminPeople'
 import { AdminSettings } from '@/pages/AdminSettings'
@@ -58,6 +59,7 @@ export function App() {
         <Route path="/door" element={<Guard roles={['staff', 'admin']}><Door /></Guard>} />
         <Route path="/admin" element={<Guard roles={['admin']}><AdminToday /></Guard>} />
         <Route path="/admin/handovers" element={<Guard roles={['admin']}><AdminHandovers /></Guard>} />
+        <Route path="/admin/activity" element={<Guard roles={['admin']}><AdminActivity /></Guard>} />
         <Route path="/admin/children" element={<Guard roles={['admin']}><AdminChildren /></Guard>} />
         <Route path="/admin/people" element={<Guard roles={['admin']}><AdminPeople /></Guard>} />
         <Route path="/admin/settings" element={<Guard roles={['admin']}><AdminSettings /></Guard>} />

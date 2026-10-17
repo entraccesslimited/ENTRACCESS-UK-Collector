@@ -43,6 +43,7 @@ export function AdminHandovers() {
               <th>Collector</th>
               <th>Authorised by</th>
               <th>Checked by</th>
+              <th>ID</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -60,6 +61,7 @@ export function AdminHandovers() {
                 </td>
                 <td>{h.authorised_by_name}</td>
                 <td>{h.staff_name}</td>
+                <td className="whitespace-nowrap">{h.outcome === 'released' ? (h.id_checked ? '✓ Checked' : 'Not recorded') : '—'}</td>
               </tr>
             ))}
           </tbody>

@@ -149,6 +149,8 @@ class CheckOut(BaseModel):
 class DecisionIn(BaseModel):
     release: bool
     reason: str | None = Field(default=None, max_length=500)
+    # Photo ID seen, or the collector is known to the member of staff.
+    id_checked: bool = False
 
 
 class HandoverOut(Out):
@@ -161,7 +163,15 @@ class HandoverOut(Out):
     staff_name: str
     outcome: HandoverOutcome
     refusal_reason: str | None
+    id_checked: bool
     occurred_at: datetime
+
+
+class ActivityOut(BaseModel):
+    at: datetime
+    who: str
+    what: str
+    kind: str
 
 
 class DoorCheckOut(BaseModel):

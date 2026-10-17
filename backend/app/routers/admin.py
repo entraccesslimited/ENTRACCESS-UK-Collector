@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app import collection, geofence
 from app.deps import AdminUser, SessionDep
 from app.models import (
+    AuditEvent,
     Authorisation,
     CheckResult,
     Child,
@@ -26,6 +27,7 @@ from app.models import (
 )
 from app.routers.parent import authorisation_out
 from app.schemas import (
+    ActivityOut,
     AuthorisationOut,
     ChildIn,
     ChildOut,
@@ -118,6 +120,74 @@ async def handovers(
     return list(rows.all())
 
 
+# What each recorded action means, in the words a manager would use.
+ACTIONS = {
+    "authorisation.created": "Added a collector",
+    "authorisation.revoked": "Removed a collector",
+    "authorisation.reissued": "Sent a collector a new pass",
+    "handovers.exported": "Exported the handover record",
+    "geofence.set": "Set the geofence",
+    "geofence.cleared": "Turned the geofence off",
+    "child.added": "Added a child",
+    "child.left": "Marked a child as left",
+    "person.added": "Added a person",
+    "person.deactivated": "Switched off a person's account",
+    "parent.linked": "Linked a parent to a child",
+}
+
+
+@router.get("/activity", response_model=list[ActivityOut])
+async def activity(
+    admin: AdminUser,
+    session: SessionDep,
+    start: date | None = None,
+    end: date | None = None,
+) -> list[ActivityOut]:
+    """Everything that happened, in one timeline: changes to who may collect
+    and who has access, and every decision at the door."""
+    since, until = _range(start, end)
+    events = (
+        await session.execute(
+            select(AuditEvent, User.full_name)
+            .outerjoin(User, User.id == AuditEvent.actor_id)
+            .where(
+                AuditEvent.nursery_id == admin.nursery_id,
+                AuditEvent.created_at >= since,
+                AuditEvent.created_at < until,
+            )
+            .order_by(AuditEvent.created_at.desc())
+            .limit(500)
+        )
+    ).all()
+    out = [
+        ActivityOut(
+            at=event.created_at,
+            who=name or "ENTRACCESS UK",
+            what=ACTIONS.get(event.action, event.action)
+            + (f": {event.detail}" if event.detail else ""),
+            kind=event.action.split(".")[0],
+        )
+        for event, name in events
+    ]
+    for h in await handovers(admin, session, start, end):
+        released = h.outcome is HandoverOutcome.RELEASED
+        out.append(
+            ActivityOut(
+                at=h.occurred_at,
+                who=h.staff_name,
+                what=(
+                    f"Released {h.child_name} to {h.collector_name} ({h.collector_relationship})"
+                    + (", ID checked" if h.id_checked else "")
+                    if released
+                    else f"Did not release {h.child_name} to {h.collector_name}: {h.refusal_reason}"
+                ),
+                kind="handover",
+            )
+        )
+    out.sort(key=lambda a: a.at if a.at.tzinfo else a.at.replace(tzinfo=UTC), reverse=True)
+    return out[:500]
+
+
 @router.get("/handovers.csv")
 async def handovers_csv(
     admin: AdminUser,
@@ -137,6 +207,7 @@ async def handovers_csv(
             "relationship",
             "authorised_by",
             "checked_by",
+            "id_checked",
             "refusal_reason",
         ]
     )
@@ -150,6 +221,7 @@ async def handovers_csv(
                 _cell(row.collector_relationship),
                 _cell(row.authorised_by_name),
                 _cell(row.staff_name),
+                "yes" if row.id_checked else "no",
                 _cell(row.refusal_reason or ""),
             ]
         )

@@ -29,6 +29,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     true,
 )
 from sqlalchemy.engine import Dialect
@@ -295,6 +296,9 @@ class Handover(Base):
     authorised_by_name: Mapped[str] = mapped_column(String(200))
     staff_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     staff_name: Mapped[str] = mapped_column(String(200))
+    # Staff confirmed photo ID, or that they know the collector, before
+    # releasing. Required for a release; the evidence a manager is asked for.
+    id_checked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
