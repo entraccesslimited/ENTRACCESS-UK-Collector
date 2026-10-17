@@ -79,6 +79,9 @@ export function Website() {
               <a href="#contact" className="btn btn-primary px-6 py-3 text-base">
                 Book a demo
               </a>
+              <Link to="/prototype" className="btn btn-secondary border-slate-300 px-6 py-3 text-base hover:border-brand-500 hover:bg-surface hover:text-brand-700">
+                Try the prototype
+              </Link>
               <a href="#pricing" className="btn btn-secondary border-slate-300 px-6 py-3 text-base hover:border-brand-500 hover:bg-surface hover:text-brand-700">
                 See pricing
               </a>

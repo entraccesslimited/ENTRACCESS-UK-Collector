@@ -6,6 +6,7 @@ import { homeFor, useSession } from '@/lib/session'
 import { CompanyEnquiries } from '@/pages/CompanyEnquiries'
 import { CompanyHome } from '@/pages/CompanyHome'
 import { Privacy } from '@/pages/Privacy'
+import { Prototype } from '@/pages/Prototype'
 import { Website } from '@/pages/Website'
 import { Welcome } from '@/pages/Welcome'
 import type { Role } from '@/lib/types'
@@ -47,6 +48,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<Website />} />
       <Route path="/privacy" element={<Privacy />} />
+      <Route path="/prototype" element={<Prototype />} />
       <Route path="/portals" element={<Welcome />} />
       <Route path="/sign-in" element={<SignIn />} />
       <Route path="/pass/:token" element={<PublicPass />} />
