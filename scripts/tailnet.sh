@@ -35,12 +35,22 @@ ENV
   chmod 600 .env.tailnet
 fi
 
+# Added separately so an existing .env.tailnet gains it too.
+if ! grep -q '^TAILNET_MAIL_PASSWORD=' .env.tailnet; then
+  echo "TAILNET_MAIL_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(9))')" >> .env.tailnet
+fi
+mail_port=$(grep -E '^TAILNET_MAIL_PORT=' .env.tailnet | cut -d= -f2 || true)
+mail_port="${mail_port:-8126}"
+
 port=$(grep -E '^TAILNET_WEB_PORT=' .env.tailnet | cut -d= -f2 || true)
 port="${port:-8190}"
 
 "${COMPOSE[@]}" up -d --build
 "${TS[@]}" funnel --bg --https="$FUNNEL_PORT" "http://127.0.0.1:${port}"
+# The email viewer, at /mail on the same address, so it works on a phone.
+"${TS[@]}" funnel --bg --https="$FUNNEL_PORT" --set-path=/mail "http://127.0.0.1:${mail_port}/mail"
 
 echo
+echo "Email viewer: ${url}/mail/  (user mail, password TAILNET_MAIL_PASSWORD in .env.tailnet)"
 echo "ENTRACCESS UK Collector is live at ${url}"
 echo "Demo data (first run): ${COMPOSE[*]} exec api python -m app.seed"

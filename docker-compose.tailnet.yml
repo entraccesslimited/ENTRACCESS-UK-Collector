@@ -11,6 +11,11 @@ services:
   mailpit:
     ports: !override
       - "127.0.0.1:${TAILNET_MAIL_PORT:-8126}:8025"
+    environment:
+      # Served at <address>/mail by Tailscale too, so it opens on a phone. It
+      # holds sign-in links, so it needs a password (in .env.tailnet).
+      MP_WEBROOT: mail
+      MP_UI_AUTH: "mail:${TAILNET_MAIL_PASSWORD:?run scripts/tailnet.sh}"
 
   api:
     build:
