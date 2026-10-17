@@ -288,13 +288,14 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
                 .map((c) => {
                   const s = status(c, world.clock)
                   return (
-                    <li key={c.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
-                      <span className="min-w-0 flex-1">
+                    <li key={c.id} className="px-3 py-2 text-sm">
+                      <p>
                         <span className="font-medium text-ink">{c.name}</span>{' '}
                         <span className="text-slate-500">
                           {c.relationship} · {c.kind === 'one_off' ? `once, ${hhmm(c.from)}–${hhmm(c.until!)}` : 'regular'}
                         </span>
-                      </span>
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                       <Tag result={s} />
                       {c.revokedAt === null && (
                         <>
@@ -307,6 +308,7 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
                           </button>
                         </>
                       )}
+                      </div>
                     </li>
                   )
                 })}
@@ -391,7 +393,8 @@ function CodeReveal({ collector }: { collector: Collector }) {
 // ---------------------------------------------------------------- collector
 
 function CollectorPanel({ world, onShow }: { world: World; onShow: (token: string) => void }) {
-  const [selected, setSelected] = useState<string | null>(null)
+  // Lucy's pass is open from the start, so there is always a QR code to scan.
+  const [selected, setSelected] = useState<string | null>('leo-lucy')
   const [latest, setLatest] = useState<{ id: string; version: number; token: string; code: string } | null>(null)
   const current = world.collectors.find((c) => c.id === selected) ?? null
   // Only ever this collector's current pass: while a new one is being signed,
@@ -425,6 +428,26 @@ function CollectorPanel({ world, onShow }: { world: World; onShow: (token: strin
       <p className="mb-3 text-sm text-slate-600">
         The parent sends each collector a link to their pass, by text or WhatsApp. Someone without a smartphone gets a six-digit code from the parent instead.
       </p>
+      {current && pass && token && (
+        <div className="mb-4 rounded-2xl bg-[#111a2e] p-4 text-center text-white">
+          <p className="text-xs tracking-widest text-[#93c5fd]">COLLECTOR PASS · LITTLE ACORNS (DEMO)</p>
+          <p className="mt-1 font-semibold">{current.name}</p>
+          <div className="mt-3">
+            <QR text={token} size={170} />
+          </div>
+          {stale && <p className="mt-2 text-xs text-amber-300">This is the pass they were first sent. The parent has since sent a new one.</p>}
+          <button className="btn btn-primary mt-3 w-full" onClick={() => onShow(token)}>
+            Show at the door
+          </button>
+          {stale && (
+            <button className="btn mt-2 w-full border border-white/30 text-white" onClick={() => setHeld((h) => ({ ...h, [current.id]: pass.token }))}>
+              Open the new pass instead
+            </button>
+          )}
+          <p className="mt-2 text-[11px] text-[#94a3b8]">The pass names no child and no date: only a signed reference this nursery can check.</p>
+        </div>
+      )}
+      <p className="mb-2 text-xs font-semibold text-brand-700">Tap a collector to open the pass they were sent.</p>
       <ul className="space-y-1">
         {world.collectors.map((c) => {
           const child = world.children.find((x) => x.id === c.childId)!
@@ -444,25 +467,6 @@ function CollectorPanel({ world, onShow }: { world: World; onShow: (token: strin
           )
         })}
       </ul>
-      {current && pass && token && (
-        <div className="mt-4 rounded-2xl bg-[#111a2e] p-4 text-center text-white">
-          <p className="text-xs tracking-widest text-[#93c5fd]">COLLECTOR PASS · LITTLE ACORNS (DEMO)</p>
-          <p className="mt-1 font-semibold">{current.name}</p>
-          <div className="mt-3">
-            <QR text={token} size={170} />
-          </div>
-          {stale && <p className="mt-2 text-xs text-amber-300">This is the pass they were first sent. The parent has since sent a new one.</p>}
-          <button className="btn btn-primary mt-3 w-full" onClick={() => onShow(token)}>
-            Show at the door
-          </button>
-          {stale && (
-            <button className="btn mt-2 w-full border border-white/30 text-white" onClick={() => setHeld((h) => ({ ...h, [current.id]: pass.token }))}>
-              Open the new pass instead
-            </button>
-          )}
-          <p className="mt-2 text-[11px] text-[#94a3b8]">The pass names no child and no date: only a signed reference this nursery can check.</p>
-        </div>
-      )}
     </Panel>
   )
 }
