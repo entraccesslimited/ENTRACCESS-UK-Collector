@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.collection import CollectionError
 from app.config import get_settings
-from app.routers import admin, auth, company, door, parent, public
+from app.routers import admin, auth, company, door, parent, public, reconciliation
 
 
 def create_app() -> FastAPI:
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
         parent.router,
         door.router,
         admin.router,
+        reconciliation.router,
         company.router,
         public.router,
     ):

@@ -22,7 +22,9 @@ does not replace registers, learning journals or staff judgement.
 - Scan the collector's pass with the phone camera (or a scanner), or enter
   their code against the child.
 - See who the collector is, who authorised them and any note from the parent,
-  then **release** or **refuse** (with a reason).
+  and anyone the child must **never be released to**.
+- **Release**, recording how they confirmed who the collector is (photo ID,
+  known to them, or the parent's password), or **refuse** (with a reason).
 - Both parents linked to the child are emailed straight away either way.
 
 **Nursery managers**
@@ -31,6 +33,17 @@ does not replace registers, learning journals or staff judgement.
 - Children, parents, staff and who is linked to whom.
 - Remove any collector (for example for a court order or a safeguarding concern).
   Marking a child as left removes every collector for them.
+- Keep each child's **never-release list** (court order, safeguarding, a
+  parent's request), with a reference and a note. Adding someone removes them
+  as a collector at once and stops a parent adding them again; room leaders
+  see the list with every check for the child. Ending one keeps the record.
+- **Reconcile** a day: import the sign-out register exported from the
+  nursery's own system (CSV with the child's name and time signed out, and
+  optionally who collected) and see, child by child, where it and the door
+  disagree: signed out with no release at the door, released but not signed
+  out, a different collector named, times over 15 minutes apart, a name that
+  matches no child, or signed out twice. Exportable to CSV. Re-importing a day
+  adds a new import; the latest is the one compared.
 
 **ENTRACCESS UK (company portal)**
 - Every nursery on one page: children, parents, room leaders, active
@@ -64,6 +77,10 @@ goes to the same sign-in, and the account decides what opens: `/parent`,
 - **A release is re-checked at the moment it happens.** A collector removed
   while standing at the door is not released.
 - **One-off passes cannot be reused.** The pass stops when the child is released.
+- **A name on the never-release list is refused at the door** even if a
+  collector of that name somehow survives, and again at the moment of release.
+  Names are compared ignoring case, accents, punctuation, word order and
+  middle names, but never on a first name alone.
 - **Every check is recorded, whatever its answer,** and handovers are
   append-only. Names are copied into the record, so it reads the same after a
   collector is removed or a member of staff leaves.
@@ -119,7 +136,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
 cd ../frontend
 npm install
-npm run dev          # http://localhost:5180, proxies /api to :8000
+npm run dev          # http://localhost:5180, proxies /api to :8000 (or $API_PROXY)
 ```
 
 ## Checks
@@ -143,7 +160,9 @@ assessment, register with the ICO, and sign a pilot agreement with the setting.
 
 ```
 backend/   FastAPI, SQLAlchemy 2 (async), Alembic, Postgres or SQLite
-  app/collection.py   the rules: authorise, revoke, reissue, check, decide
+  app/collection.py   the rules: authorise, revoke, reissue, check, decide, restrict
+  app/reconcile.py    reading a register export and comparing it with the door
+  app/names.py        when two written names are the same person
   app/passes.py       signed passes and daily codes
   app/routers/        auth, parent, door, admin, public pass page
 frontend/  React, TypeScript, Vite, Tailwind

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import { Alert, PageTitle } from '@/components/ui'
-import { todayIso, when } from '@/lib/format'
+import { ID_CHECK_LABEL, todayIso, when } from '@/lib/format'
 import { useLoad } from '@/lib/useLoad'
 import type { Handover } from '@/lib/types'
 
@@ -61,7 +61,13 @@ export function AdminHandovers() {
                 </td>
                 <td>{h.authorised_by_name}</td>
                 <td>{h.staff_name}</td>
-                <td className="whitespace-nowrap">{h.outcome === 'released' ? (h.id_checked ? '✓ Checked' : 'Not recorded') : '—'}</td>
+                <td className="whitespace-nowrap">{h.outcome === 'released'
+                    ? h.id_check_method
+                      ? `✓ ${ID_CHECK_LABEL[h.id_check_method]}`
+                      : h.id_checked
+                        ? '✓ Checked'
+                        : 'Not recorded'
+                    : '—'}</td>
               </tr>
             ))}
           </tbody>

@@ -1,4 +1,4 @@
-import type { Authorisation, CheckResult } from './types'
+import type { Authorisation, CheckResult, IdCheckMethod, ReconciliationFlag, RestrictionReason } from './types'
 
 const LONDON = 'Europe/London'
 
@@ -31,6 +31,7 @@ export const STATUS_LABEL: Record<CheckResult, string> = {
   unreadable: 'Not a pass',
   wrong_nursery: 'Another nursery',
   unknown: 'Unknown',
+  restricted: 'Never release',
   revoked: 'Removed',
   reissued: 'Replaced',
   not_yet_valid: 'Starts later',
@@ -52,6 +53,33 @@ export function validity(auth: Pick<Authorisation, 'kind' | 'valid_from' | 'vali
   return auth.valid_until
     ? `Any day, ${day(auth.valid_from)} to ${day(auth.valid_until)}`
     : `Any day from ${day(auth.valid_from)}`
+}
+
+export const ID_CHECK_LABEL: Record<IdCheckMethod, string> = {
+  photo_id: 'Photo ID',
+  known_to_staff: 'Known to staff',
+  password: 'Password',
+}
+
+export const RESTRICTION_LABEL: Record<RestrictionReason, string> = {
+  court_order: 'Court order',
+  safeguarding: 'Safeguarding',
+  parent_request: 'Parent’s request',
+  other: 'Other',
+}
+
+export const FLAG_LABEL: Record<ReconciliationFlag, string> = {
+  no_handover: 'Signed out, not released at the door',
+  no_sign_out: 'Released, not signed out',
+  collector_mismatch: 'Register names someone else',
+  time_gap: 'Times over 15 minutes apart',
+  unknown_child: 'Child not found here',
+  signed_out_twice: 'Signed out twice',
+}
+
+/** A time of day in the nursery's zone, or a dash. */
+export function clock(value: string | null): string {
+  return value ? timeOf(value) : '—'
 }
 
 function timeOf(value: string): string {

@@ -12,6 +12,7 @@ const NAV = {
     { to: '/admin', label: 'Today' },
     { to: '/door', label: 'Door check' },
     { to: '/admin/handovers', label: 'Handovers' },
+    { to: '/admin/reconcile', label: 'Reconcile' },
     { to: '/admin/activity', label: 'Activity' },
     { to: '/admin/children', label: 'Children' },
     { to: '/admin/people', label: 'People' },

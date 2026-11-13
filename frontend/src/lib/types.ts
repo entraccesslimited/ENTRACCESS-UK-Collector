@@ -5,6 +5,7 @@ export type CheckResult =
   | 'unreadable'
   | 'wrong_nursery'
   | 'unknown'
+  | 'restricted'
   | 'revoked'
   | 'reissued'
   | 'not_yet_valid'
@@ -15,6 +16,9 @@ export type CheckResult =
   | 'locked'
   | 'outside_geofence'
   | 'no_location'
+
+export type IdCheckMethod = 'photo_id' | 'known_to_staff' | 'password'
+export type RestrictionReason = 'court_order' | 'safeguarding' | 'parent_request' | 'other'
 
 export interface Me {
   id: string
@@ -83,6 +87,7 @@ export interface Check {
   authorised_by_name: string | null
   kind: Kind | null
   valid_until: string | null
+  restrictions: { person_name: string; reason: RestrictionReason }[]
 }
 
 export interface Handover {
@@ -96,6 +101,7 @@ export interface Handover {
   outcome: 'released' | 'refused'
   refusal_reason: string | null
   id_checked: boolean
+  id_check_method: IdCheckMethod | null
   occurred_at: string
 }
 
@@ -164,4 +170,56 @@ export interface CompanyOverview {
   active_collectors: number
   collections_30d: number
   exceptions_30d: number
+}
+
+export interface Restriction {
+  id: string
+  child_id: string
+  person_name: string
+  reason: RestrictionReason
+  reference: string | null
+  detail: string | null
+  created_at: string
+  created_by_name: string
+  ended_at: string | null
+  removed_collectors: string[]
+}
+
+export type ReconciliationFlag =
+  | 'no_handover'
+  | 'no_sign_out'
+  | 'collector_mismatch'
+  | 'time_gap'
+  | 'unknown_child'
+  | 'signed_out_twice'
+
+export interface SignOutImport {
+  id: string
+  day: string
+  source: string
+  rows: number
+  imported_at: string
+  imported_by_name: string | null
+}
+
+export interface ReconciliationLine {
+  child_name: string
+  child_id: string | null
+  signed_out_at: string | null
+  register_collected_by: string | null
+  released_at: string | null
+  collector_name: string | null
+  collector_relationship: string | null
+  staff_name: string | null
+  id_check_method: IdCheckMethod | null
+  refusals: string[]
+  flags: ReconciliationFlag[]
+}
+
+export interface Reconciliation {
+  day: string
+  register_import: SignOutImport | null
+  lines: ReconciliationLine[]
+  flagged: number
+  matched: number
 }

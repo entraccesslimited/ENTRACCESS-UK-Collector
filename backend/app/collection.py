@@ -9,10 +9,13 @@ The rules live here rather than in the routes, because they are the product:
   changes each day.
 * Revoking is instant and final. Reissuing gives a new pass and code and stops
   the old ones at once.
+* A name on a child's never-release list is never released that child: the
+  parent cannot add them, a collector already added is removed when the
+  restriction is, and the door refuses them even so.
 * Every check at the door is recorded, whatever its answer. A release or a
   refusal can only follow a check that came back valid, and is re-checked at
   the moment it is made, so a collector revoked while standing at the door is
-  not released.
+  not released. A release records how staff checked the collector's identity.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import geofence, passes
+from app import geofence, names, passes
 from app.config import get_settings
 from app.models import (
     AuditEvent,
@@ -38,8 +41,11 @@ from app.models import (
     DoorCheck,
     Handover,
     HandoverOutcome,
+    IdCheckMethod,
     Nursery,
     ParentLink,
+    Restriction,
+    RestrictionReason,
     User,
 )
 from app.notify import notify_parents
@@ -221,6 +227,23 @@ async def authorise(
         raise CollectionError(
             f"{child.full_name} already has {MAX_ACTIVE_PER_CHILD} active collectors. "
             "Remove one before adding another."
+        )
+
+    if await restriction_for(session, child.id, name) is not None:
+        await audit(
+            session,
+            nursery_id=parent.nursery_id,
+            actor=parent,
+            action="authorisation.blocked",
+            subject_id=child.id,
+            detail=f"{name} for {child.full_name}",
+        )
+        # Kept although the request fails: the attempt is what a manager needs to see.
+        await session.commit()
+        # Said plainly, without the reason: the nursery explains, not the app.
+        raise CollectionError(
+            f"{name} cannot be added as a collector for {child.full_name}. "
+            "Please speak to the nursery."
         )
 
     valid_from, valid_until = _window(nursery, data, now)
@@ -441,9 +464,12 @@ async def released_today(
 async def _unless_collected(
     session: AsyncSession, staff: User, auth: Authorisation, result: CheckResult, now: datetime
 ) -> CheckResult:
-    """A valid collector is still refused for a child who has already gone home."""
+    """A valid collector is still refused for a child who has already gone home,
+    or whose name is on the child's never-release list."""
     if result is not CheckResult.VALID:
         return result
+    if await restriction_for(session, auth.child_id, auth.collector_name) is not None:
+        return CheckResult.RESTRICTED
     nursery = await nursery_of(session, staff)
     if await released_today(session, nursery, auth.child_id, now) is not None:
         return CheckResult.ALREADY_COLLECTED
@@ -529,7 +555,7 @@ async def decide(
     *,
     release: bool,
     reason: str | None,
-    id_checked: bool = False,
+    id_check_method: IdCheckMethod | None = None,
 ) -> Handover:
     check = await session.scalar(
         select(DoorCheck).where(DoorCheck.id == check_id, DoorCheck.nursery_id == staff.nursery_id)
@@ -555,6 +581,12 @@ async def decide(
             "This collector stopped being authorised after the check. Do not release the child.",
             status=409,
         )
+    if release and await restriction_for(session, child.id, auth.collector_name) is not None:
+        raise CollectionError(
+            f"{auth.collector_name} is on {child.full_name}'s never-release list. "
+            "Do not release the child. Tell the manager.",
+            status=409,
+        )
     if release:
         # Checked again here, not only at the door check: two members of staff
         # can check two collectors for the same child a minute apart.
@@ -567,9 +599,17 @@ async def decide(
                 f"{earlier.collector_name}. Do not release.",
                 status=409,
             )
-    if release and not id_checked:
+    if release and id_check_method is None:
         raise CollectionError(
-            "Confirm the ID check first: photo ID seen, or the collector is known to you."
+            "Say how you checked who the collector is: photo ID, known to you, or the password."
+        )
+    if (
+        release
+        and id_check_method is IdCheckMethod.PASSWORD
+        and not (auth.note_for_staff or "").strip()
+    ):
+        raise CollectionError(
+            "The parent did not set a password for this collector. Check photo ID instead."
         )
     if not release and not (reason or "").strip():
         raise CollectionError("Say why the child was not released.")
@@ -587,7 +627,8 @@ async def decide(
         authorised_by_name=parent.full_name if parent else "Unknown",
         staff_id=staff.id,
         staff_name=staff.full_name,
-        id_checked=id_checked,
+        id_checked=release,
+        id_check_method=id_check_method if release else None,
         occurred_at=now,
     )
     session.add(handover)
@@ -596,3 +637,104 @@ async def decide(
     await session.flush()
     await notify_parents(session, handover)
     return handover
+
+
+# The never-release list.
+
+
+async def restrictions_for_child(
+    session: AsyncSession, child_id: uuid.UUID, *, current_only: bool = True
+) -> list[Restriction]:
+    query = select(Restriction).where(Restriction.child_id == child_id)
+    if current_only:
+        query = query.where(Restriction.ended_at.is_(None))
+    rows = await session.scalars(query.order_by(Restriction.created_at.desc()))
+    return list(rows.all())
+
+
+async def restriction_for(
+    session: AsyncSession, child_id: uuid.UUID, person_name: str
+) -> Restriction | None:
+    """The restriction in force for this child that names this person, if any."""
+    for restriction in await restrictions_for_child(session, child_id):
+        if names.same_person(restriction.person_name, person_name):
+            return restriction
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class NewRestriction:
+    person_name: str
+    reason: RestrictionReason
+    reference: str | None = None
+    detail: str | None = None
+
+
+async def restrict(
+    session: AsyncSession, admin: User, child_id: uuid.UUID, data: NewRestriction
+) -> tuple[Restriction, list[Authorisation]]:
+    """Put someone on a child's never-release list, and remove them as a collector.
+
+    Returns the restriction and the collectors it removed.
+    """
+    child = await child_in_nursery(session, admin, child_id)
+    name = " ".join(data.person_name.split())
+    if len(names.words(name)) < 2:
+        raise CollectionError("Give the person's full name, as on the order or record.")
+    if await restriction_for(session, child.id, name) is not None:
+        raise CollectionError(f"{name} is already on {child.full_name}'s never-release list.")
+    restriction = Restriction(
+        nursery_id=admin.nursery_id,
+        child_id=child.id,
+        person_name=name,
+        reason=data.reason,
+        reference=(data.reference or "").strip() or None,
+        detail=(data.detail or "").strip() or None,
+        created_by_id=admin.id,
+    )
+    session.add(restriction)
+    await session.flush()
+    await audit(
+        session,
+        nursery_id=admin.nursery_id,
+        actor=admin,
+        action="restriction.added",
+        subject_id=child.id,
+        detail=f"{name} for {child.full_name} ({data.reason.value})",
+    )
+    removed: list[Authorisation] = []
+    auths = await session.scalars(
+        select(Authorisation).where(
+            Authorisation.child_id == child.id, Authorisation.revoked_at.is_(None)
+        )
+    )
+    for auth in auths.all():
+        if names.same_person(auth.collector_name, name):
+            await revoke(session, admin, auth)
+            removed.append(auth)
+    return restriction, removed
+
+
+async def end_restriction(
+    session: AsyncSession, admin: User, restriction_id: uuid.UUID
+) -> Restriction:
+    restriction = await session.scalar(
+        select(Restriction).where(
+            Restriction.id == restriction_id, Restriction.nursery_id == admin.nursery_id
+        )
+    )
+    if restriction is None:
+        raise CollectionError("No such restriction.", status=404)
+    if restriction.ended_at is None:
+        restriction.ended_at = datetime.now(UTC)
+        restriction.ended_by_id = admin.id
+        child = await session.get(Child, restriction.child_id)
+        await audit(
+            session,
+            nursery_id=admin.nursery_id,
+            actor=admin,
+            action="restriction.ended",
+            subject_id=restriction.child_id,
+            detail=f"{restriction.person_name} for {child.full_name if child else 'a child'}",
+        )
+    return restriction

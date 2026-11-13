@@ -11,6 +11,6 @@ export default defineConfig({
   build: { assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined) },
   server: {
     port: 5180,
-    proxy: { '/api': 'http://localhost:8000' },
+    proxy: { '/api': process.env.API_PROXY ?? 'http://localhost:8000' },
   },
 })

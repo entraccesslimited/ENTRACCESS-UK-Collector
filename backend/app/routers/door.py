@@ -19,6 +19,7 @@ from app.schemas import (
     HandoverOut,
     PassCheckIn,
     PositionIn,
+    RestrictionAtDoor,
 )
 
 router = APIRouter(prefix="/door", tags=["door"])
@@ -28,6 +29,10 @@ MESSAGES: dict[CheckResult, str] = {
     CheckResult.UNREADABLE: "That is not a collector pass. Do not release the child.",
     CheckResult.WRONG_NURSERY: "This pass was not issued by this nursery. Do not release.",
     CheckResult.UNKNOWN: "No such collector. Do not release the child.",
+    CheckResult.RESTRICTED: (
+        "This person is on the child's never-release list. Do not release the child. "
+        "Keep the child inside and tell the manager now."
+    ),
     CheckResult.REVOKED: "The parent has removed this collector. Do not release the child.",
     CheckResult.REISSUED: "This is an old pass that has been replaced. Do not release.",
     CheckResult.NOT_YET_VALID: "This collector is not authorised yet. Do not release.",
@@ -65,6 +70,10 @@ async def _out(session: SessionDep, check: DoorCheck) -> CheckOut:
         out.child_id = child.id
         out.child_name = child.full_name
         out.room = child.room
+        out.restrictions = [
+            RestrictionAtDoor(person_name=r.person_name, reason=r.reason)
+            for r in await collection.restrictions_for_child(session, child.id)
+        ]
         if check.result is CheckResult.ALREADY_COLLECTED:
             # Say when and to whom, so staff can tell the person at the door.
             nursery = await session.get(Nursery, child.nursery_id)
@@ -135,6 +144,6 @@ async def decide(
         check_id,
         release=body.release,
         reason=body.reason,
-        id_checked=body.id_checked,
+        id_check_method=body.id_check_method,
     )
     return HandoverOut.model_validate(handover)

@@ -8,7 +8,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models import CheckMethod, CheckResult, CollectorKind, HandoverOutcome, Role
+from app.models import (
+    CheckMethod,
+    CheckResult,
+    CollectorKind,
+    HandoverOutcome,
+    IdCheckMethod,
+    RestrictionReason,
+    Role,
+)
 
 
 class Out(BaseModel):
@@ -126,6 +134,13 @@ class GeofenceOut(BaseModel):
     max_radius_m: int = 5000
 
 
+class RestrictionAtDoor(BaseModel):
+    """Who must not be given this child. Shown to staff with every check for the child."""
+
+    person_name: str
+    reason: RestrictionReason
+
+
 class CheckOut(BaseModel):
     """The answer at the door."""
 
@@ -144,13 +159,14 @@ class CheckOut(BaseModel):
     authorised_by_name: str | None = None
     kind: CollectorKind | None = None
     valid_until: datetime | None = None
+    restrictions: list[RestrictionAtDoor] = Field(default_factory=list)
 
 
 class DecisionIn(BaseModel):
     release: bool
     reason: str | None = Field(default=None, max_length=500)
-    # Photo ID seen, or the collector is known to the member of staff.
-    id_checked: bool = False
+    # How staff checked the person is the named collector. Required to release.
+    id_check_method: IdCheckMethod | None = None
 
 
 class HandoverOut(Out):
@@ -164,6 +180,7 @@ class HandoverOut(Out):
     outcome: HandoverOutcome
     refusal_reason: str | None
     id_checked: bool
+    id_check_method: IdCheckMethod | None = None
     occurred_at: datetime
 
 
@@ -306,3 +323,60 @@ class EnquiryOut(Out):
     created_at: datetime
     handled_at: datetime | None
     handled_by: str | None
+
+
+class RestrictionIn(BaseModel):
+    person_name: str = Field(min_length=3, max_length=200)
+    reason: RestrictionReason
+    reference: str | None = Field(default=None, max_length=120, examples=["Court order ZW26P00123"])
+    detail: str | None = Field(default=None, max_length=500)
+
+
+class RestrictionOut(Out):
+    id: uuid.UUID
+    child_id: uuid.UUID
+    person_name: str
+    reason: RestrictionReason
+    reference: str | None
+    detail: str | None
+    created_at: datetime
+    created_by_name: str
+    ended_at: datetime | None
+    removed_collectors: list[str] = Field(default_factory=list)
+
+
+class SignOutImportIn(BaseModel):
+    day: date
+    csv: str = Field(min_length=1, max_length=1_000_000)
+    source: str = Field(default="CSV", max_length=200, examples=["famly-sign-outs.csv"])
+
+
+class SignOutImportOut(BaseModel):
+    id: uuid.UUID
+    day: date
+    source: str
+    rows: int
+    imported_at: datetime
+    imported_by_name: str | None
+
+
+class ReconciliationLineOut(BaseModel):
+    child_name: str
+    child_id: uuid.UUID | None
+    signed_out_at: datetime | None
+    register_collected_by: str | None
+    released_at: datetime | None
+    collector_name: str | None
+    collector_relationship: str | None
+    staff_name: str | None
+    id_check_method: IdCheckMethod | None
+    refusals: list[str]
+    flags: list[str]
+
+
+class ReconciliationOut(BaseModel):
+    day: date
+    register_import: SignOutImportOut | None
+    lines: list[ReconciliationLineOut]
+    flagged: int
+    matched: int

@@ -15,10 +15,11 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -94,6 +95,8 @@ class CheckResult(enum.StrEnum):
     UNREADABLE = "unreadable"
     WRONG_NURSERY = "wrong_nursery"
     UNKNOWN = "unknown"
+    # The collector's name is on the child's never-release list.
+    RESTRICTED = "restricted"
     REVOKED = "revoked"
     REISSUED = "reissued"
     NOT_YET_VALID = "not_yet_valid"
@@ -112,6 +115,24 @@ class CheckResult(enum.StrEnum):
 class HandoverOutcome(enum.StrEnum):
     RELEASED = "released"
     REFUSED = "refused"
+
+
+class IdCheckMethod(enum.StrEnum):
+    """How staff satisfied themselves the person at the door is the named collector."""
+
+    # Photo ID seen, and the name on it matches the collector's.
+    PHOTO_ID = "photo_id"
+    # Known to the member of staff by sight from earlier collections.
+    KNOWN_TO_STAFF = "known_to_staff"
+    # Gave the password the parent set in the note for staff.
+    PASSWORD = "password"
+
+
+class RestrictionReason(enum.StrEnum):
+    COURT_ORDER = "court_order"
+    SAFEGUARDING = "safeguarding"
+    PARENT_REQUEST = "parent_request"
+    OTHER = "other"
 
 
 def _enum(kind: type[enum.Enum], name: str) -> Enum:
@@ -299,7 +320,81 @@ class Handover(Base):
     # Staff confirmed photo ID, or that they know the collector, before
     # releasing. Required for a release; the evidence a manager is asked for.
     id_checked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # How they confirmed it. Null on refusals, and on releases recorded before
+    # the method was kept.
+    id_check_method: Mapped[IdCheckMethod | None] = mapped_column(
+        _enum(IdCheckMethod, "id_check_method")
+    )
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class Restriction(Base):
+    """Someone who must never be given a child, whatever they hold.
+
+    Kept by the nursery's managers, not by parents: a court order or a
+    safeguarding decision is not something the other parent can undo. Adding
+    one removes any collector of that name for the child at once, a parent
+    cannot add them again, and their name is shown at the door with every
+    check for the child. Ended rather than deleted, so the record shows what
+    was in force on any day.
+    """
+
+    __tablename__ = "restrictions"
+    __table_args__ = (Index("ix_restrictions_child", "nursery_id", "child_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"))
+    child_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("children.id", ondelete="CASCADE"))
+    person_name: Mapped[str] = mapped_column(String(200))
+    reason: Mapped[RestrictionReason] = mapped_column(
+        _enum(RestrictionReason, "restriction_reason")
+    )
+    # A court order number, a case reference: whatever the nursery files it under.
+    reference: Mapped[str | None] = mapped_column(String(120))
+    detail: Mapped[str | None] = mapped_column(String(500))
+    created_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    ended_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
+class SignOutImport(Base):
+    """One day's sign-out register, exported from the nursery's own system.
+
+    Imports are never edited. Importing a day again adds a new one, and the
+    latest is the one reconciled; the earlier ones stay as the record of what
+    was uploaded and by whom.
+    """
+
+    __tablename__ = "sign_out_imports"
+    __table_args__ = (Index("ix_sign_out_imports_day", "nursery_id", "day"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"))
+    day: Mapped[date] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(200))
+    rows: Mapped[int] = mapped_column(Integer)
+    imported_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    imported_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class SignOut(Base):
+    """One child signed out in the nursery's register, as imported."""
+
+    __tablename__ = "sign_outs"
+    __table_args__ = (Index("ix_sign_outs_import", "import_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    import_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sign_out_imports.id", ondelete="CASCADE")
+    )
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"))
+    line: Mapped[int] = mapped_column(Integer)
+    # As written in the register; matched to a child by name when imported.
+    child_name: Mapped[str] = mapped_column(String(200))
+    child_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("children.id"))
+    signed_out_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    collected_by: Mapped[str | None] = mapped_column(String(200))
 
 
 class AuditEvent(Base):

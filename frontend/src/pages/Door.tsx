@@ -3,10 +3,10 @@ import { useState, type FormEvent } from 'react'
 import { CameraScan, cameraSupported } from '@/components/CameraScan'
 import { Alert, PageTitle } from '@/components/ui'
 import { api } from '@/lib/api'
-import { day } from '@/lib/format'
+import { day, RESTRICTION_LABEL } from '@/lib/format'
 import { currentPosition } from '@/lib/location'
 import { useLoad } from '@/lib/useLoad'
-import type { Check, Child, Handover } from '@/lib/types'
+import type { Check, Child, Handover, IdCheckMethod } from '@/lib/types'
 
 type Mode = 'scan' | 'code'
 
@@ -178,7 +178,14 @@ function EnterCode({ fenced, onChecked }: { fenced: boolean; onChecked: (check: 
 function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Handover) => void; onBack: () => void }) {
   const [refusing, setRefusing] = useState(false)
   const [reason, setReason] = useState('')
-  const [idChecked, setIdChecked] = useState(false)
+  const [method, setMethod] = useState<IdCheckMethod | null>(null)
+  const methods: { value: IdCheckMethod; title: string; help: string }[] = [
+    { value: 'photo_id', title: 'Photo ID', help: 'The name on it matches the collector’s.' },
+    { value: 'known_to_staff', title: 'I know them', help: 'You have seen them collect before.' },
+    ...(check.note_for_staff
+      ? [{ value: 'password' as const, title: 'Password', help: 'They gave the password in the parent’s note.' }]
+      : []),
+  ]
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -189,7 +196,7 @@ function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Han
       onDecided(
         await api<Handover>(`/door/checks/${check.check_id}/decision`, {
           method: 'POST',
-          json: { release, reason: release ? null : reason, id_checked: release && idChecked },
+          json: { release, reason: release ? null : reason, id_check_method: release ? method : null },
         }),
       )
     } catch (err) {
@@ -206,6 +213,20 @@ function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Han
       </p>
       <p className="mt-1 text-sm text-slate-700">{check.message}</p>
       {error && <div className="mt-3"><Alert>{error}</Alert></div>}
+
+      {check.restrictions.length > 0 && (
+        <div className="mt-4 rounded-lg border-2 border-red-500 bg-red-50 p-3 text-sm" role="alert">
+          <p className="font-bold text-red-800">Never release {check.child_name?.split(' ')[0] ?? 'this child'} to:</p>
+          <ul className="mt-1 list-disc pl-5">
+            {check.restrictions.map((r) => (
+              <li key={r.person_name}>
+                <b>{r.person_name}</b> <span className="text-red-800">({RESTRICTION_LABEL[r.reason]})</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-red-800">If the person at the door is one of them, keep the child inside and tell the manager.</p>
+        </div>
+      )}
 
       {(check.child_name || check.collector_name) && (
         <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
@@ -259,18 +280,31 @@ function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Han
       )}
 
       {check.can_release && !refusing && (
-        <label className="mt-4 flex items-start gap-3 rounded-lg bg-slate-100 p-3 text-sm">
-          <input type="checkbox" className="mt-0.5 size-5 shrink-0" checked={idChecked} onChange={(e) => setIdChecked(e.target.checked)} />
-          <span>
-            <b>Photo ID seen, or I know this collector.</b> Check the name matches before releasing. This is recorded with the handover.
-          </span>
-        </label>
+        <fieldset className="mt-4 rounded-lg bg-slate-100 p-3 text-sm">
+          <legend className="sr-only">How did you check who the collector is?</legend>
+          <p className="mb-2 font-semibold">How did you check this is {check.collector_name}?</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {methods.map((m) => (
+              <label
+                key={m.value}
+                className={`flex cursor-pointer items-start gap-2 rounded-lg border bg-white p-2 ${method === m.value ? 'border-brand-600 ring-2 ring-brand-100' : 'border-slate-300'}`}
+              >
+                <input type="radio" name="id-check" className="mt-0.5 size-4 shrink-0" checked={method === m.value} onChange={() => setMethod(m.value)} />
+                <span>
+                  <b>{m.title}</b>
+                  <span className="block text-xs text-slate-600">{m.help}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-600">Recorded with the handover. If you cannot confirm who they are, refuse.</p>
+        </fieldset>
       )}
 
       <div className="mt-5 flex flex-wrap gap-2">
         {check.can_release && !refusing && (
           <>
-            <button className="btn btn-success" disabled={busy || !idChecked} onClick={() => decide(true)}>
+            <button className="btn btn-success" disabled={busy || !method} onClick={() => decide(true)}>
               Release {check.child_name?.split(' ')[0]}
             </button>
             <button className="btn btn-secondary" disabled={busy} onClick={() => setRefusing(true)}>

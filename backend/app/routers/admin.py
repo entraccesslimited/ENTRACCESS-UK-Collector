@@ -22,7 +22,9 @@ from app.models import (
     DoorCheck,
     Handover,
     HandoverOutcome,
+    IdCheckMethod,
     ParentLink,
+    Restriction,
     User,
 )
 from app.routers.parent import authorisation_out
@@ -39,6 +41,8 @@ from app.schemas import (
     LinkOut,
     PersonIn,
     PersonOut,
+    RestrictionIn,
+    RestrictionOut,
     TodayOut,
 )
 from app.security import hash_password, password_problem
@@ -133,7 +137,25 @@ ACTIONS = {
     "person.added": "Added a person",
     "person.deactivated": "Switched off a person's account",
     "parent.linked": "Linked a parent to a child",
+    "authorisation.blocked": "Tried to add a collector on the never-release list",
+    "restriction.added": "Added to a never-release list",
+    "restriction.ended": "Ended a never-release restriction",
+    "signouts.imported": "Imported the sign-out register",
+    "reconciliation.exported": "Exported a reconciliation",
 }
+
+
+ID_CHECK_WORDS = {
+    IdCheckMethod.PHOTO_ID: "photo ID",
+    IdCheckMethod.KNOWN_TO_STAFF: "known to staff",
+    IdCheckMethod.PASSWORD: "the parent's password",
+}
+
+
+def _id_words(h: Handover) -> str:
+    if h.id_check_method is not None:
+        return f", ID checked: {ID_CHECK_WORDS[h.id_check_method]}"
+    return ", ID checked" if h.id_checked else ""
 
 
 @router.get("/activity", response_model=list[ActivityOut])
@@ -177,7 +199,7 @@ async def activity(
                 who=h.staff_name,
                 what=(
                     f"Released {h.child_name} to {h.collector_name} ({h.collector_relationship})"
-                    + (", ID checked" if h.id_checked else "")
+                    + _id_words(h)
                     if released
                     else f"Did not release {h.child_name} to {h.collector_name}: {h.refusal_reason}"
                 ),
@@ -208,6 +230,7 @@ async def handovers_csv(
             "authorised_by",
             "checked_by",
             "id_checked",
+            "id_check_method",
             "refusal_reason",
         ]
     )
@@ -222,6 +245,7 @@ async def handovers_csv(
                 _cell(row.authorised_by_name),
                 _cell(row.staff_name),
                 "yes" if row.id_checked else "no",
+                row.id_check_method.value if row.id_check_method else "",
                 _cell(row.refusal_reason or ""),
             ]
         )
@@ -519,3 +543,62 @@ async def link(body: LinkIn, admin: AdminUser, session: SessionDep) -> LinkOut:
         child_name=child.full_name,
         relationship_label=body.relationship_label,
     )
+
+
+async def _restriction_out(
+    session: SessionDep, restriction: Restriction, removed: list[Authorisation] | None = None
+) -> RestrictionOut:
+    creator = await session.get(User, restriction.created_by_id)
+    return RestrictionOut(
+        id=restriction.id,
+        child_id=restriction.child_id,
+        person_name=restriction.person_name,
+        reason=restriction.reason,
+        reference=restriction.reference,
+        detail=restriction.detail,
+        created_at=restriction.created_at,
+        created_by_name=creator.full_name if creator else "Unknown",
+        ended_at=restriction.ended_at,
+        removed_collectors=[a.collector_name for a in removed or []],
+    )
+
+
+@router.get("/children/{child_id}/restrictions", response_model=list[RestrictionOut])
+async def child_restrictions(
+    child_id: uuid.UUID, admin: AdminUser, session: SessionDep
+) -> list[RestrictionOut]:
+    """The child's never-release list, including restrictions that have ended."""
+    child = await collection.child_in_nursery(session, admin, child_id)
+    rows = await collection.restrictions_for_child(session, child.id, current_only=False)
+    return [await _restriction_out(session, r) for r in rows]
+
+
+@router.post(
+    "/children/{child_id}/restrictions",
+    response_model=RestrictionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_restriction(
+    child_id: uuid.UUID, body: RestrictionIn, admin: AdminUser, session: SessionDep
+) -> RestrictionOut:
+    """Never release this child to this person. Removes them as a collector at once."""
+    restriction, removed = await collection.restrict(
+        session,
+        admin,
+        child_id,
+        collection.NewRestriction(
+            person_name=body.person_name,
+            reason=body.reason,
+            reference=body.reference,
+            detail=body.detail,
+        ),
+    )
+    return await _restriction_out(session, restriction, removed)
+
+
+@router.post("/restrictions/{restriction_id}/end", response_model=RestrictionOut)
+async def end_restriction(
+    restriction_id: uuid.UUID, admin: AdminUser, session: SessionDep
+) -> RestrictionOut:
+    restriction = await collection.end_restriction(session, admin, restriction_id)
+    return await _restriction_out(session, restriction)
