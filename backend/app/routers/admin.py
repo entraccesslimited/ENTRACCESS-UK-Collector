@@ -142,6 +142,11 @@ ACTIONS = {
     "restriction.ended": "Ended a never-release restriction",
     "signouts.imported": "Imported the sign-out register",
     "reconciliation.exported": "Exported a reconciliation",
+    "contact.added": "Added a nursery contact",
+    "contacts.imported": "Imported nursery contacts",
+    "pass.shared": "Sent a pass",
+    "kpis.exported": "Exported the KPI summary",
+    "evidence.exported": "Exported an evidence pack",
 }
 
 

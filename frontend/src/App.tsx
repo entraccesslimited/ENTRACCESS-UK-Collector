@@ -13,7 +13,9 @@ import type { Role } from '@/lib/types'
 import { AdminChildren } from '@/pages/AdminChildren'
 import { AdminActivity } from '@/pages/AdminActivity'
 import { AdminHandovers } from '@/pages/AdminHandovers'
+import { AdminEvidence } from '@/pages/AdminEvidence'
 import { AdminPeople } from '@/pages/AdminPeople'
+import { AdminReports } from '@/pages/AdminReports'
 import { AdminReconciliation } from '@/pages/AdminReconciliation'
 import { AdminSettings } from '@/pages/AdminSettings'
 import { AdminToday } from '@/pages/AdminToday'
@@ -61,6 +63,8 @@ export function App() {
         <Route path="/admin" element={<Guard roles={['admin']}><AdminToday /></Guard>} />
         <Route path="/admin/handovers" element={<Guard roles={['admin']}><AdminHandovers /></Guard>} />
         <Route path="/admin/reconcile" element={<Guard roles={['admin']}><AdminReconciliation /></Guard>} />
+        <Route path="/admin/reports" element={<Guard roles={['admin']}><AdminReports /></Guard>} />
+        <Route path="/admin/evidence" element={<Guard roles={['admin']}><AdminEvidence /></Guard>} />
         <Route path="/admin/activity" element={<Guard roles={['admin']}><AdminActivity /></Guard>} />
         <Route path="/admin/children" element={<Guard roles={['admin']}><AdminChildren /></Guard>} />
         <Route path="/admin/people" element={<Guard roles={['admin']}><AdminPeople /></Guard>} />

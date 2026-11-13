@@ -85,6 +85,13 @@ class CollectorKind(enum.StrEnum):
     ONE_OFF = "one_off"
 
 
+class CollectorSource(enum.StrEnum):
+    # Named by a parent in the parent portal.
+    PARENT = "parent"
+    # Held by the nursery from registration forms, added by a manager.
+    SETTING = "setting"
+
+
 class CheckMethod(enum.StrEnum):
     PASS = "pass"
     CODE = "code"
@@ -253,6 +260,13 @@ class Authorisation(Base):
     note_for_staff: Mapped[str | None] = mapped_column(String(300))
 
     kind: Mapped[CollectorKind] = mapped_column(_enum(CollectorKind, "collector_kind"))
+    # Who named this collector. A nursery contact is authorised by the manager
+    # who added it (authorised_by), on the strength of the registration form.
+    source: Mapped[CollectorSource] = mapped_column(
+        _enum(CollectorSource, "collector_source"),
+        default=CollectorSource.PARENT,
+        server_default=CollectorSource.PARENT.value,
+    )
     valid_from: Mapped[datetime] = mapped_column(UTCDateTime())
     valid_until: Mapped[datetime | None] = mapped_column(UTCDateTime())
     version: Mapped[int] = mapped_column(Integer, default=1)

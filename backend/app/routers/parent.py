@@ -12,7 +12,14 @@ from app import collection
 from app.config import get_settings
 from app.deps import ParentUser, SessionDep
 from app.models import Authorisation, Child, Handover, ParentLink, User
-from app.schemas import AuthorisationIn, AuthorisationOut, ChildOut, HandoverOut, PassOut
+from app.schemas import (
+    AuthorisationIn,
+    AuthorisationOut,
+    ChildOut,
+    HandoverOut,
+    PassOut,
+    SharedIn,
+)
 
 router = APIRouter(prefix="/parent", tags=["parent"])
 
@@ -36,6 +43,7 @@ async def authorisation_out(
         used_at=auth.used_at,
         status=collection.status_of(auth, now),
         authorised_by_name=parent.full_name if parent else "Unknown",
+        source=auth.source,
     )
 
 
@@ -104,7 +112,12 @@ async def get_pass(authorisation_id: uuid.UUID, parent: ParentUser, session: Ses
 
 
 async def _pass(session: SessionDep, parent: User, auth: Authorisation) -> PassOut:
-    nursery = await collection.nursery_of(session, parent)
+    return await pass_out(session, parent, auth)
+
+
+async def pass_out(session: SessionDep, user: User, auth: Authorisation) -> PassOut:
+    nursery = await collection.nursery_of(session, user)
+    child = await session.get(Child, auth.child_id)
     now = datetime.now(UTC)
     token = collection.pass_for(auth)
     return PassOut(
@@ -113,7 +126,41 @@ async def _pass(session: SessionDep, parent: User, auth: Authorisation) -> PassO
         code_today=collection.code_for(nursery, auth, now),
         share_url=f"{get_settings().APP_BASE_URL}/pass/{token}",
         status=collection.status_of(auth, now),
+        nursery_name=nursery.name,
+        child_first_name=child.full_name.split()[0] if child else "",
     )
+
+
+CHANNELS = {
+    "whatsapp": "WhatsApp",
+    "sms": "text message",
+    "email": "email",
+    "share": "the phone's share menu",
+    "copy": "a copied link",
+}
+
+
+async def record_shared(
+    session: SessionDep, user: User, auth: Authorisation, body: SharedIn
+) -> None:
+    """Note how a pass was sent. The sending itself happens on the sharer's phone."""
+    what = "today's code" if body.what == "code" else "pass link"
+    await collection.audit(
+        session,
+        nursery_id=auth.nursery_id,
+        actor=user,
+        action="pass.shared",
+        subject_id=auth.id,
+        detail=f"{what} for {auth.collector_name} by {CHANNELS[body.channel]}",
+    )
+
+
+@router.post("/collectors/{authorisation_id}/shared", status_code=status.HTTP_204_NO_CONTENT)
+async def shared(
+    authorisation_id: uuid.UUID, body: SharedIn, parent: ParentUser, session: SessionDep
+) -> None:
+    auth = await collection.authorisation_for_parent(session, parent, authorisation_id)
+    await record_shared(session, parent, auth, body)
 
 
 @router.get("/handovers", response_model=list[HandoverOut])

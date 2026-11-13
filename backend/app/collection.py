@@ -38,6 +38,7 @@ from app.models import (
     CheckResult,
     Child,
     CollectorKind,
+    CollectorSource,
     DoorCheck,
     Handover,
     HandoverOutcome,
@@ -204,7 +205,33 @@ async def authorise(
     session: AsyncSession, parent: User, child_id: uuid.UUID, data: NewAuthorisation
 ) -> Authorisation:
     child = await child_for_parent(session, parent, child_id)
-    nursery = await nursery_of(session, parent)
+    return await _create(session, parent, child, data, CollectorSource.PARENT)
+
+
+async def add_contact(
+    session: AsyncSession, admin: User, child_id: uuid.UUID, data: NewAuthorisation
+) -> Authorisation:
+    """A collector the nursery already holds on the child's registration form.
+
+    Always regular: a standing contact, not a one-off. The parents linked to
+    the child are told, and can remove the contact like any other.
+    """
+    child = await child_in_nursery(session, admin, child_id)
+    if not child.active:
+        raise CollectionError(f"{child.full_name} has left the nursery.")
+    if data.kind is not CollectorKind.REGULAR:
+        raise CollectionError("A nursery contact is a regular collector.")
+    return await _create(session, admin, child, data, CollectorSource.SETTING)
+
+
+async def _create(
+    session: AsyncSession,
+    actor: User,
+    child: Child,
+    data: NewAuthorisation,
+    source: CollectorSource,
+) -> Authorisation:
+    nursery = await nursery_of(session, actor)
     now = datetime.now(UTC)
 
     name = data.collector_name.strip()
@@ -232,12 +259,16 @@ async def authorise(
     if await restriction_for(session, child.id, name) is not None:
         await audit(
             session,
-            nursery_id=parent.nursery_id,
-            actor=parent,
+            nursery_id=actor.nursery_id,
+            actor=actor,
             action="authorisation.blocked",
             subject_id=child.id,
             detail=f"{name} for {child.full_name}",
         )
+        if source is CollectorSource.SETTING:
+            raise CollectionError(
+                f"{name} is on {child.full_name}'s never-release list and cannot be a contact."
+            )
         # Kept although the request fails: the attempt is what a manager needs to see.
         await session.commit()
         # Said plainly, without the reason: the nursery explains, not the app.
@@ -248,14 +279,15 @@ async def authorise(
 
     valid_from, valid_until = _window(nursery, data, now)
     auth = Authorisation(
-        nursery_id=parent.nursery_id,
+        nursery_id=actor.nursery_id,
         child_id=child.id,
-        authorised_by_id=parent.id,
+        authorised_by_id=actor.id,
         collector_name=name,
         collector_relationship=data.collector_relationship.strip() or "Other",
         collector_phone=phone,
         note_for_staff=(data.note_for_staff or "").strip() or None,
         kind=data.kind,
+        source=source,
         valid_from=valid_from,
         valid_until=valid_until,
     )
@@ -263,9 +295,9 @@ async def authorise(
     await session.flush()
     await audit(
         session,
-        nursery_id=parent.nursery_id,
-        actor=parent,
-        action="authorisation.created",
+        nursery_id=actor.nursery_id,
+        actor=actor,
+        action="contact.added" if source is CollectorSource.SETTING else "authorisation.created",
         subject_id=auth.id,
         detail=f"{data.kind.value} collector {name} for {child.full_name}",
     )
@@ -700,7 +732,7 @@ async def restrict(
         actor=admin,
         action="restriction.added",
         subject_id=child.id,
-        detail=f"{name} for {child.full_name} ({data.reason.value})",
+        detail=f"{name} for {child.full_name} ({data.reason.value.replace('_', ' ')})",
     )
     removed: list[Authorisation] = []
     auths = await session.scalars(

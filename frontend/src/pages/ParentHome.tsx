@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 
+import { SharePass } from '@/components/SharePass'
 import { Alert, Badge, Modal, PageTitle, QR } from '@/components/ui'
 import { api } from '@/lib/api'
 import { code, todayIso, validity } from '@/lib/format'
@@ -58,6 +59,7 @@ function ChildCollectors({ child }: { child: Child }) {
                 {auth.collector_name} <span className="text-sm font-normal text-slate-500">· {auth.collector_relationship}</span>
               </p>
               <p className="text-sm text-slate-600">{validity(auth)}</p>
+              {auth.source === 'setting' && <p className="text-xs text-slate-500">Added by the nursery from your registration form</p>}
             </div>
             <div className="flex items-center gap-2">
               <Badge status={auth.status} />
@@ -253,20 +255,6 @@ function PassDialog({ auth, onClose, onChanged }: { auth: Authorisation; onClose
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const share = async () => {
-    if (!pass.data) return
-    const text = `Your pass to collect from the nursery: ${pass.data.share_url}`
-    try {
-      if (navigator.share) await navigator.share({ title: 'Collection pass', text, url: pass.data.share_url })
-      else {
-        await navigator.clipboard.writeText(pass.data.share_url)
-        setMessage('Link copied. Send it to the collector by text or WhatsApp.')
-      }
-    } catch {
-      /* the share sheet was closed */
-    }
-  }
-
   const act = async (path: 'revoke' | 'reissue') => {
     setError(null)
     try {
@@ -300,9 +288,7 @@ function PassDialog({ auth, onClose, onChanged }: { auth: Authorisation; onClose
                 {auth.kind === 'regular' ? 'A new code each day. ' : ''}For a collector without a phone: read it to them, and they give it at the door.
               </p>
             </div>
-            <button className="btn btn-primary w-full" onClick={share}>
-              Send the pass to {auth.collector_name.split(' ')[0]}
-            </button>
+            <SharePass auth={auth} pass={pass.data} logPath={`/parent/collectors/${auth.id}/shared`} />
           </>
         )}
         <div className="flex flex-wrap justify-between gap-2 border-t border-slate-100 pt-4">

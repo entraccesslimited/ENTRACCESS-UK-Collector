@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 
-import { Alert, Badge, Modal, PageTitle } from '@/components/ui'
+import { SharePass } from '@/components/SharePass'
+import { Alert, Badge, Modal, PageTitle, QR } from '@/components/ui'
 import { api } from '@/lib/api'
-import { day, RESTRICTION_LABEL, validity } from '@/lib/format'
+import { code, day, RESTRICTION_LABEL, validity } from '@/lib/format'
 import { useLoad } from '@/lib/useLoad'
-import type { Authorisation, Child, Link, Person, Restriction, RestrictionReason } from '@/lib/types'
+import type { Authorisation, Child, Link, PassInfo, Person, Restriction, RestrictionReason } from '@/lib/types'
 
 export function AdminChildren() {
   const children = useLoad<Child[]>('/admin/children')
@@ -30,6 +31,7 @@ export function AdminChildren() {
     <>
       <PageTitle title="Children" sub="Link each child to their parents, so they can authorise collectors." />
       {error && <Alert>{error}</Alert>}
+      <ImportContacts />
       <form onSubmit={add} className="card mb-6 flex flex-wrap items-end gap-3">
         <label className="flex-1">
           <span className="label">Child’s full name</span>
@@ -97,6 +99,7 @@ function ManageChild({ child, parents, onClose, onChanged }: { child: Child; par
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  const [sending, setSending] = useState<Authorisation | null>(null)
 
   const run = async (fn: () => Promise<unknown>, done: string) => {
     setError(null)
@@ -150,10 +153,17 @@ function ManageChild({ child, parents, onClose, onChanged }: { child: Child; par
                 <span>
                   <b>{a.collector_name}</b> · {a.collector_relationship} · {validity(a)}
                   <br />
-                  <span className="text-slate-500">authorised by {a.authorised_by_name}</span>
+                  <span className="text-slate-500">
+                    {a.source === 'setting' ? `nursery contact, added by ${a.authorised_by_name}` : `authorised by ${a.authorised_by_name}`}
+                  </span>
                 </span>
                 <span className="flex items-center gap-2">
                   <Badge status={a.status} />
+                  {a.source === 'setting' && (a.status === 'valid' || a.status === 'not_yet_valid') && (
+                    <button className="btn btn-secondary" onClick={() => setSending(sending?.id === a.id ? null : a)}>
+                      Pass &amp; send
+                    </button>
+                  )}
                   {(a.status === 'valid' || a.status === 'not_yet_valid') && (
                     <button
                       className="btn btn-secondary text-red-700"
@@ -167,6 +177,8 @@ function ManageChild({ child, parents, onClose, onChanged }: { child: Child; par
             ))}
           </ul>
         </section>
+        {sending && <ContactPass auth={sending} onClose={() => setSending(null)} />}
+        {child.active && <AddContact child={child} onAdded={(name) => run(async () => undefined, `${name} added. The parents have been emailed.`)} />}
         <NeverRelease child={child} onChanged={() => collectors.reload()} />
         {child.active && (
           <section className="border-t border-slate-100 pt-4">
@@ -316,5 +328,137 @@ function NeverRelease({ child, onChanged }: { child: Child; onChanged: () => Pro
         </button>
       )}
     </section>
+  )
+}
+
+function AddContact({ child, onAdded }: { child: Child; onAdded: (name: string) => void }) {
+  const empty = { collector_name: '', collector_relationship: '', collector_phone: '', note_for_staff: '' }
+  const [form, setForm] = useState(empty)
+  const [open, setOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const set = (key: keyof typeof form) => (event: { target: { value: string } }) => setForm({ ...form, [key]: event.target.value })
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setError(null)
+    try {
+      const made = await api<Authorisation>(`/admin/children/${child.id}/contacts`, {
+        method: 'POST',
+        json: { ...form, note_for_staff: form.note_for_staff || null },
+      })
+      setForm(empty)
+      setOpen(false)
+      onAdded(made.collector_name)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add the contact.')
+    }
+  }
+
+  if (!open) {
+    return (
+      <button className="btn btn-secondary" onClick={() => setOpen(true)}>
+        Add a contact from the registration form
+      </button>
+    )
+  }
+  return (
+    <form onSubmit={submit} className="space-y-2 rounded-lg border border-slate-200 p-3">
+      <h3 className="font-semibold">Nursery contact</h3>
+      <p className="text-xs text-slate-600">
+        Someone the parents named on the registration form. They become a regular collector; both parents are emailed and can remove them.
+      </p>
+      {error && <Alert>{error}</Alert>}
+      <input className="input" placeholder="Full name" value={form.collector_name} onChange={set('collector_name')} required />
+      <div className="grid grid-cols-2 gap-2">
+        <input className="input" placeholder="Relationship" value={form.collector_relationship} onChange={set('collector_relationship')} required />
+        <input className="input" type="tel" placeholder="Phone" value={form.collector_phone} onChange={set('collector_phone')} required />
+      </div>
+      <input className="input" placeholder="Collection password (optional)" value={form.note_for_staff} maxLength={300} onChange={set('note_for_staff')} />
+      <div className="flex gap-2">
+        <button className="btn btn-primary">Add contact</button>
+        <button type="button" className="btn btn-secondary" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function ContactPass({ auth, onClose }: { auth: Authorisation; onClose: () => void }) {
+  const pass = useLoad<PassInfo>(`/admin/collectors/${auth.id}/pass`)
+  return (
+    <section className="space-y-3 rounded-lg border border-brand-100 bg-brand-50/40 p-3">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">Pass for {auth.collector_name}</h3>
+        <button className="text-sm text-slate-500" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {pass.error && <Alert>{pass.error}</Alert>}
+      {pass.data && (
+        <>
+          <QR text={pass.data.token} size={180} />
+          <p className="text-center font-mono text-2xl font-bold tracking-widest">{code(pass.data.code_today)}</p>
+          <SharePass auth={auth} pass={pass.data} logPath={`/admin/collectors/${auth.id}/shared`} />
+        </>
+      )}
+    </section>
+  )
+}
+
+function ImportContacts() {
+  const file = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const upload = async (chosen: File) => {
+    setError(null)
+    setMessage(null)
+    setBusy(true)
+    try {
+      const result = await api<{ added: number; skipped: number }>('/admin/contacts/import', {
+        method: 'POST',
+        json: { csv: await chosen.text() },
+      })
+      setMessage(
+        `${result.added} contact${result.added === 1 ? '' : 's'} added` +
+          (result.skipped ? `, ${result.skipped} already there` : '') +
+          '. Parents have been emailed the names added for their children.',
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not import the contacts.')
+    } finally {
+      setBusy(false)
+      if (file.current) file.current.value = ''
+    }
+  }
+
+  return (
+    <div className="card mb-6 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Contacts from registration forms</h2>
+          <p className="text-sm text-slate-600">
+            Import the people parents named as able to collect: CSV with <span className="font-mono text-xs">Child, Contact name, Relationship, Phone</span> and optionally <span className="font-mono text-xs">Password</span>. All rows are added or none.
+          </p>
+        </div>
+        <input
+          ref={file}
+          type="file"
+          accept=".csv,text/csv,text/plain"
+          className="hidden"
+          onChange={(e) => {
+            const chosen = e.target.files?.[0]
+            if (chosen) void upload(chosen)
+          }}
+        />
+        <button className="btn btn-secondary" disabled={busy} onClick={() => file.current?.click()}>
+          {busy ? 'Importing…' : 'Import contacts (CSV)'}
+        </button>
+      </div>
+      {error && <Alert>{error}</Alert>}
+      {message && <Alert tone="ok">{message}</Alert>}
+    </div>
   )
 }

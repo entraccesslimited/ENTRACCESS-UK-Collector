@@ -12,6 +12,7 @@ from app.models import (
     CheckMethod,
     CheckResult,
     CollectorKind,
+    CollectorSource,
     HandoverOutcome,
     IdCheckMethod,
     RestrictionReason,
@@ -71,6 +72,7 @@ class AuthorisationOut(Out):
     used_at: datetime | None
     status: CheckResult
     authorised_by_name: str
+    source: CollectorSource = CollectorSource.PARENT
 
 
 class PassOut(BaseModel):
@@ -81,6 +83,8 @@ class PassOut(BaseModel):
     code_today: str = Field(description="Six digits, good today only, in the nursery's time.")
     share_url: str
     status: CheckResult
+    nursery_name: str = ""
+    child_first_name: str = ""
 
 
 class PublicPassOut(BaseModel):
@@ -380,3 +384,109 @@ class ReconciliationOut(BaseModel):
     lines: list[ReconciliationLineOut]
     flagged: int
     matched: int
+
+
+class ContactIn(BaseModel):
+    """A collector from the child's registration form, added by the nursery."""
+
+    collector_name: str = Field(min_length=3, max_length=200)
+    collector_relationship: str = Field(min_length=1, max_length=60, examples=["Grandparent"])
+    collector_phone: str = Field(min_length=7, max_length=40, examples=["07700 900123"])
+    note_for_staff: str | None = Field(default=None, max_length=300)
+    start_date: date | None = None
+    end_date: date | None = None
+
+
+class ContactImportIn(BaseModel):
+    csv: str = Field(min_length=1, max_length=500_000)
+
+
+class ContactImportOut(BaseModel):
+    added: int
+    skipped: int
+    collectors: list[str]
+
+
+class SharedIn(BaseModel):
+    """How the pass went to the collector. Sent from the sharer's own phone."""
+
+    channel: Literal["whatsapp", "sms", "email", "share", "copy"]
+    what: Literal["link", "code"]
+
+
+class KpisOut(BaseModel):
+    start: date
+    end: date
+    releases: int
+    refusals: int
+    refusal_reasons: list[tuple[str, int]]
+    blocked_checks: int
+    blocked_by_result: dict[str, int]
+    id_checks: dict[str, int]
+    collectors_added_by_parents: int
+    one_off_collectors: int
+    contacts_added_by_nursery: int
+    collectors_removed: int
+    passes_shared: int
+    restrictions_added: int
+    restrictions_in_force: int
+    days_with_releases: int
+    registers_imported: int
+    days_without_register: int
+    reconciliation_flags: dict[str, int]
+
+
+class EvidenceCollectorOut(BaseModel):
+    child_name: str
+    collector_name: str
+    collector_relationship: str
+    kind: CollectorKind
+    source: CollectorSource
+    authorised_by_name: str
+    created_at: datetime
+    valid_until: datetime | None
+    revoked_at: datetime | None
+    used_at: datetime | None
+
+
+class EvidenceRestrictionOut(BaseModel):
+    child_name: str
+    person_name: str
+    reason: RestrictionReason
+    reference: str | None
+    created_at: datetime
+    created_by_name: str
+    ended_at: datetime | None
+
+
+class EvidenceEventOut(BaseModel):
+    at: datetime
+    kind: str
+    child: str
+    detail: str
+    who: str
+
+
+class EvidenceFlagOut(BaseModel):
+    day: date
+    child_name: str
+    flags: list[str]
+    signed_out_at: datetime | None
+    register_collected_by: str | None
+    released_at: datetime | None
+    collector_name: str | None
+
+
+class EvidenceOut(BaseModel):
+    nursery_name: str
+    start: date
+    end: date
+    child_name: str | None
+    generated_at: datetime
+    generated_by: str
+    kpis: KpisOut
+    collectors: list[EvidenceCollectorOut]
+    restrictions: list[EvidenceRestrictionOut]
+    events: list[EvidenceEventOut]
+    flagged: list[EvidenceFlagOut]
+    registers: list[date]

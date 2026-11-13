@@ -13,8 +13,12 @@ does not replace registers, learning journals or staff judgement.
 **Parents**
 - Authorise a **one-off** collector (one collection, then the pass stops) or a
   **regular** collector (any day in a window, with a new code each day).
-- Share a pass with the collector: a link that shows a QR code, plus a six-digit
-  code for a collector without a phone.
+- Send a pass to the collector their own way: WhatsApp, text or email (or the
+  phone's share menu), choosing the QR pass link or today's six-digit code. It
+  opens in the parent's own app with the message ready; ENTRACCESS UK sends
+  nothing itself, and only notes which way it went.
+- See the contacts the nursery added from their registration form, and remove
+  any of them.
 - Remove a collector instantly, or issue a new pass and code (the old ones stop at once).
 - See every collection of their child, and every refusal.
 
@@ -31,6 +35,20 @@ does not replace registers, learning journals or staff judgement.
 - Today's releases, refusals and exceptions at the door.
 - The full handover record, filterable by date and exportable to CSV.
 - Children, parents, staff and who is linked to whom.
+- **Nursery contacts**: the people parents named on the registration form,
+  added one at a time or imported by CSV (Child, Contact name, Relationship,
+  Phone, optional Password; all rows or none, and anyone already there is
+  skipped). They become regular collectors, both parents are emailed the
+  names, and the manager can send each one their pass.
+- **Reports**: a KPI summary for up to a quarter, for all children or one:
+  releases, refusals and why, checks the app refused and why, how identity was
+  checked, collectors added and removed, passes sent, never-release changes,
+  and how many days were reconciled against the register. Exportable to CSV.
+- **Evidence pack**: one printable document (save it as PDF) for a period and
+  one child or all, for an inspection or a safeguarding review: the summary,
+  the never-release list, everyone who could collect, register disagreements
+  and the full timeline. Its timeline also downloads as CSV, and each pack is
+  logged.
 - Remove any collector (for example for a court order or a safeguarding concern).
   Marking a child as left removes every collector for them.
 - Keep each child's **never-release list** (court order, safeguarding, a

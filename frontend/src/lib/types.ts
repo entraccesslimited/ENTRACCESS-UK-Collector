@@ -50,6 +50,7 @@ export interface Authorisation {
   used_at: string | null
   status: CheckResult
   authorised_by_name: string
+  source: 'parent' | 'setting'
 }
 
 export interface PassInfo {
@@ -58,6 +59,8 @@ export interface PassInfo {
   code_today: string
   share_url: string
   status: CheckResult
+  nursery_name: string
+  child_first_name: string
 }
 
 export interface PublicPass {
@@ -222,4 +225,68 @@ export interface Reconciliation {
   lines: ReconciliationLine[]
   flagged: number
   matched: number
+}
+
+export interface Kpis {
+  start: string
+  end: string
+  releases: number
+  refusals: number
+  refusal_reasons: [string, number][]
+  blocked_checks: number
+  blocked_by_result: Partial<Record<CheckResult, number>>
+  id_checks: Partial<Record<IdCheckMethod | 'not_recorded', number>>
+  collectors_added_by_parents: number
+  one_off_collectors: number
+  contacts_added_by_nursery: number
+  collectors_removed: number
+  passes_shared: number
+  restrictions_added: number
+  restrictions_in_force: number
+  days_with_releases: number
+  registers_imported: number
+  days_without_register: number
+  reconciliation_flags: Partial<Record<ReconciliationFlag, number>>
+}
+
+export interface Evidence {
+  nursery_name: string
+  start: string
+  end: string
+  child_name: string | null
+  generated_at: string
+  generated_by: string
+  kpis: Kpis
+  collectors: {
+    child_name: string
+    collector_name: string
+    collector_relationship: string
+    kind: Kind
+    source: 'parent' | 'setting'
+    authorised_by_name: string
+    created_at: string
+    valid_until: string | null
+    revoked_at: string | null
+    used_at: string | null
+  }[]
+  restrictions: {
+    child_name: string
+    person_name: string
+    reason: RestrictionReason
+    reference: string | null
+    created_at: string
+    created_by_name: string
+    ended_at: string | null
+  }[]
+  events: { at: string; kind: string; child: string; detail: string; who: string }[]
+  flagged: {
+    day: string
+    child_name: string
+    flags: ReconciliationFlag[]
+    signed_out_at: string | null
+    register_collected_by: string | null
+    released_at: string | null
+    collector_name: string | null
+  }[]
+  registers: string[]
 }

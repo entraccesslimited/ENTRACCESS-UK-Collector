@@ -13,6 +13,7 @@ const NAV = {
     { to: '/door', label: 'Door check' },
     { to: '/admin/handovers', label: 'Handovers' },
     { to: '/admin/reconcile', label: 'Reconcile' },
+    { to: '/admin/reports', label: 'Reports' },
     { to: '/admin/activity', label: 'Activity' },
     { to: '/admin/children', label: 'Children' },
     { to: '/admin/people', label: 'People' },
@@ -30,7 +31,7 @@ export function Layout() {
   if (!me) return null
   return (
     <div className="min-h-screen">
-      <header className="bg-ink text-white">
+      <header className="bg-ink text-white print:hidden">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
           <div className="flex items-center gap-2">
             <img src="/favicon.svg" alt="" className="size-7 rounded-md" />
@@ -67,7 +68,7 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">
+      <main className="mx-auto max-w-5xl px-4 py-6 print:max-w-none print:p-0">
         <Outlet />
       </main>
     </div>
