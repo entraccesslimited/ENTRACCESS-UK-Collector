@@ -3,9 +3,13 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } 
 import { CameraScan, cameraSupported } from '@/components/CameraScan'
 import { SiteLayout } from '@/components/SiteLayout'
 import { QR } from '@/components/ui'
+import { href, message as shareMessage, type Channel, type What } from '@/lib/share'
 import {
   CODE_LIMIT,
+  FLAG_LABEL,
+  ID_LABEL,
   LABEL,
+  REASON_LABEL,
   MESSAGES,
   Refused,
   checkCode,
@@ -15,14 +19,21 @@ import {
   decide,
   hhmm,
   passFor,
+  reconcile,
   releasedToday,
+  restrict,
+  restrictionFor,
+  sampleRegister,
   startingWorld,
   status,
   tamper,
   uid,
   type Collector,
   type DoorCheck,
+  type IdMethod,
   type Kind,
+  type RegisterLine,
+  type RestrictionReason,
   type Result,
   type World,
 } from '@/lib/prototype'
@@ -36,6 +47,8 @@ const EVIDENCE = [
   ['forged', 'Altered or old pass refused', 'A tampered pass, or one since replaced, is refused.'],
   ['twice', 'A child goes home once', 'A second collector for a child already collected is refused.'],
   ['locked', 'Code guessing stopped', `${CODE_LIMIT} wrong codes for one child pause code entry.`],
+  ['restricted', 'Never-release enforced', 'A name on a child’s never-release list cannot collect them.'],
+  ['reconciled', 'Register reconciled', 'The nursery’s sign-out register is compared with the door.'],
 ] as const
 type EvidenceKey = (typeof EVIDENCE)[number][0]
 
@@ -44,8 +57,8 @@ const SCENARIOS: { title: string; steps: string[] }[] = [
     title: 'Normal collection',
     steps: [
       'In “What the collector has”, pick Lucy Shah (Leo’s grandmother) and press “Show at the door”.',
-      'At the door, read the result and the note Priya left for staff. Tick the ID check.',
-      'Release Leo. Both parents are told, and the manager’s record updates.',
+      'At the door, read the result and the note Priya left for staff. Choose how you checked who she is.',
+      'Release Leo. Both parents are told, and the manager’s record updates with the ID check.',
     ],
   },
   {
@@ -83,6 +96,22 @@ const SCENARIOS: { title: string; steps: string[] }[] = [
       'Raj Patel, Ruby’s grandfather, has no smartphone. As Sarah, press “Pass & code” on Raj to see the six-digit code she reads him.',
       'At the door, choose “Enter code”, pick Ruby and type that code.',
       `Try a wrong code ${CODE_LIMIT} times for one child: code entry pauses and staff are told to call the parent.`,
+    ],
+  },
+  {
+    title: 'Never-release list',
+    steps: [
+      'Maya has a court order: Rob Shah must never collect her. As Priya, try to add Rob Shah for Maya: the app refuses.',
+      'As the manager, add Dev Shah to Leo’s never-release list. Dev is removed as a collector at once.',
+      'Show Dev’s pass for Leo at the door: refused, and every check for Leo shows who must never collect him.',
+    ],
+  },
+  {
+    title: 'End-of-day register',
+    steps: [
+      'Release a child or two first. Then, as the manager, press “Use today’s sample register”.',
+      'Press “Compare with the door”: every child whose register entry and door record disagree is flagged.',
+      'Edit the register (another collector’s name, a time an hour out) and compare again.',
     ],
   },
 ]
@@ -162,7 +191,7 @@ export function Prototype() {
           <CollectorPanel world={w} onShow={(token) => setPresented({ token, at: Date.now() })} />
           <DoorPanel world={w} refresh={refresh} prove={prove} presented={presented} />
         </div>
-        <ManagerPanel world={w} />
+        <ManagerPanel world={w} refresh={refresh} prove={prove} />
       </div>
     </SiteLayout>
   )
@@ -185,7 +214,7 @@ function Evidence({ proved }: { proved: Set<EvidenceKey> }) {
       <h2 className="text-xl text-ink">
         {proved.size} of {EVIDENCE.length} safeguards seen working
       </h2>
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5 xl:grid-cols-9">
         {EVIDENCE.map(([key, title, text]) => (
           <div key={key} className={`rounded-xl border p-3 ${proved.has(key) ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200'}`}>
             <span
@@ -228,6 +257,14 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
     setError(null)
     if (form.name.trim().length < 2 || !form.relationship.trim()) return setError('Give their name and how they know the child.')
     if (form.kind === 'one_off' && minutes(form.until) <= minutes(form.from)) return setError('The window has to end after it starts.')
+    const forChild = world.children.find((c) => c.id === form.childId)!
+    if (restrictionFor(world, form.childId, form.name)) {
+      world.audit.push({ at: world.clock, who: parent.name, what: `Tried to add ${form.name.trim()} for ${forChild.name}: on the never-release list` })
+      prove('restricted')
+      refresh()
+      // Said plainly, without the reason: the nursery explains, not the app.
+      return setError(`${form.name.trim()} cannot be added as a collector for ${forChild.name}. Please speak to the nursery.`)
+    }
     world.collectors.push({
       id: uid('c'),
       childId: form.childId,
@@ -239,6 +276,7 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
       from: form.kind === 'one_off' ? minutes(form.from) : 0,
       until: form.kind === 'one_off' ? minutes(form.until) : null,
       authorisedBy: parent.name,
+      source: 'parent',
       version: 1,
       revokedAt: null,
       usedAt: null,
@@ -293,13 +331,14 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
                         <span className="font-medium text-ink">{c.name}</span>{' '}
                         <span className="text-slate-500">
                           {c.relationship} · {c.kind === 'one_off' ? `once, ${hhmm(c.from)}–${hhmm(c.until!)}` : 'regular'}
+                          {c.source === 'setting' && ' · from the registration form'}
                         </span>
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                       <Tag result={s} />
                       {c.revokedAt === null && (
                         <>
-                          <CodeReveal collector={c} />
+                          <SendPass collector={c} world={world} sender={parent.name} refresh={refresh} />
                           <button className="text-xs text-brand-700 underline" onClick={() => reissue(c)}>
                             Send a new pass
                           </button>
@@ -367,10 +406,12 @@ function ParentPanel({ world, refresh, prove }: { world: World; refresh: () => v
   )
 }
 
-/** The parent's “Pass & code”: today's six-digit code, to read to someone without a smartphone. */
-function CodeReveal({ collector }: { collector: Collector }) {
+/** The parent's “Pass & send”: today's code, and the message ready for
+ *  WhatsApp, text or email on their own phone. Nothing is sent from here. */
+function SendPass({ collector, world, sender, refresh }: { collector: Collector; world: World; sender: string; refresh: () => void }) {
   const [code, setCode] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [what, setWhat] = useState<What>('link')
   useEffect(() => {
     if (!open) return
     let live = true
@@ -379,14 +420,62 @@ function CodeReveal({ collector }: { collector: Collector }) {
       live = false
     }
   }, [open, collector, collector.version])
-  return open ? (
-    <span className="rounded-md bg-mist px-2 py-0.5 font-mono text-sm tracking-widest text-ink" title="Today’s code">
-      {code ?? '······'}
-    </span>
-  ) : (
-    <button className="text-xs text-brand-700 underline" onClick={() => setOpen(true)}>
-      Pass &amp; code
-    </button>
+  if (!open) {
+    return (
+      <button className="text-xs text-brand-700 underline" onClick={() => setOpen(true)}>
+        Pass &amp; send
+      </button>
+    )
+  }
+  const child = world.children.find((c) => c.id === collector.childId)!
+  const text = shareMessage(
+    {
+      collectorName: collector.name,
+      childFirstName: child.name.split(' ')[0],
+      nurseryName: 'Little Acorns',
+      // The prototype has no pass pages; the live app sends the collector's own.
+      shareUrl: `${location.origin}/prototype`,
+      code: code ?? '000000',
+      regular: collector.kind === 'regular',
+    },
+    what,
+  )
+  const log = (channel: Channel) => {
+    world.audit.push({ at: world.clock, who: sender, what: `Sent ${collector.name} ${what === 'code' ? 'today’s code' : 'the pass link'} by ${channel === 'sms' ? 'text' : channel === 'whatsapp' ? 'WhatsApp' : 'email'}` })
+    refresh()
+  }
+  return (
+    <div className="mt-2 w-full space-y-2 rounded-lg border border-slate-200 bg-mist p-2">
+      <p className="text-xs">
+        Today’s code <span className="font-mono text-sm tracking-widest text-ink">{code ?? '······'}</span>
+      </p>
+      <div className="grid grid-cols-2 gap-1 text-xs">
+        {(['link', 'code'] as What[]).map((w) => (
+          <button key={w} type="button" onClick={() => setWhat(w)} className={`rounded-md border px-2 py-1 ${what === w ? 'border-brand-500 bg-surface font-semibold text-ink' : 'border-slate-300 text-ink'}`}>
+            {w === 'link' ? 'QR pass link' : 'Today’s code'}
+          </button>
+        ))}
+      </div>
+      <p className="rounded bg-surface p-2 text-[11px] text-ink">{text}</p>
+      <div className="grid grid-cols-3 gap-1">
+        {([['whatsapp', 'WhatsApp'], ['sms', 'Text'], ['email', 'Email']] as [Channel, string][]).map(([channel, label]) => (
+          <a
+            key={channel}
+            className="btn btn-secondary px-1 py-1 text-center text-xs"
+            href={href(channel, collector.phone, text, `Collecting ${child.name.split(' ')[0]}`)}
+            target={channel === 'whatsapp' ? '_blank' : undefined}
+            rel="noopener noreferrer"
+            onClick={() => log(channel)}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
+      <p className="text-[11px] text-slate-500">Opens your own app with the message ready. Sample numbers only.</p>
+      <button className="text-xs text-slate-500 underline" onClick={() => setOpen(false)}>
+        Close
+      </button>
+    </div>
   )
 }
 
@@ -489,7 +578,7 @@ function DoorPanel({
   const [childId, setChildId] = useState(world.children[0].id)
   const [code, setCode] = useState('')
   const [check, setCheck] = useState<DoorCheck | null>(null)
-  const [idChecked, setIdChecked] = useState(false)
+  const [idMethod, setIdMethod] = useState<IdMethod | null>(null)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
@@ -502,10 +591,11 @@ function DoorPanel({
     if (k.result === 'wrong_nursery' || k.result === 'reissued') prove('forged')
     if (k.result === 'already_collected') prove('twice')
     if (k.result === 'locked') prove('locked')
+    if (k.result === 'restricted') prove('restricted')
   }
   const begin = (k: DoorCheck) => {
     setCheck(k)
-    setIdChecked(false)
+    setIdMethod(null)
     setReason('')
     setError(null)
     setDone(null)
@@ -539,7 +629,7 @@ function DoorPanel({
   const choose = (release: boolean) => {
     if (!check) return
     try {
-      const h = decide(world, check, release, idChecked, reason)
+      const h = decide(world, check, release, release ? idMethod : null, reason)
       const child = world.children.find((c) => c.id === h.childId)!
       if (release) prove('released')
       setDone(release ? `${child.name} released to ${h.collector}. Both parents have been told.` : `Not released. ${child.name} stays; the parents have been told why.`)
@@ -652,6 +742,21 @@ function DoorPanel({
             <span className="text-xs text-slate-500">{LABEL[check.result]} · {hhmm(check.at)}</span>
           </div>
           <p className="mt-2 text-sm text-ink">{message}</p>
+          {child && world.restrictions.some((r) => r.childId === child.id) && (
+            <div className="mt-3 rounded-xl border-2 border-red-500 bg-red-50 p-3 text-sm text-red-950" role="alert">
+              <p className="font-bold text-red-800">Never release {child.name.split(' ')[0]} to:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {world.restrictions
+                  .filter((r) => r.childId === child.id)
+                  .map((r) => (
+                    <li key={r.id}>
+                      <b>{r.person}</b> <span className="text-red-800">({REASON_LABEL[r.reason]})</span>
+                    </li>
+                  ))}
+              </ul>
+              <p className="mt-1 text-xs text-red-800">If the person at the door is one of them, keep the child inside and tell the manager.</p>
+            </div>
+          )}
           {child && (
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
               <dt className="text-slate-500">Child</dt>
@@ -685,11 +790,25 @@ function DoorPanel({
           {error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
           {check.result === 'valid' && (
             <div className="mt-4 space-y-2">
-              <label className="flex items-start gap-2 text-sm text-ink">
-                <input type="checkbox" className="mt-1" checked={idChecked} onChange={(e) => setIdChecked(e.target.checked)} />
-                Photo ID seen, or the collector is known to me
-              </label>
-              <button className="btn btn-success w-full" onClick={() => choose(true)}>
+              <fieldset className="rounded-xl bg-mist p-2 text-sm">
+                <legend className="sr-only">How did you check who the collector is?</legend>
+                <p className="mb-1 font-semibold text-ink">How did you check this is {collector?.name}?</p>
+                <div className="grid gap-1">
+                  {(['photo_id', 'known_to_staff', ...(collector?.note ? (['password'] as const) : [])] as IdMethod[]).map((m) => (
+                    <label key={m} className={`flex cursor-pointer items-center gap-2 rounded-lg border bg-surface px-2 py-1.5 text-ink ${idMethod === m ? 'border-brand-600 ring-2 ring-brand-100' : 'border-slate-300'}`}>
+                      <input type="radio" name="proto-id" checked={idMethod === m} onChange={() => setIdMethod(m)} />
+                      <span>
+                        <b>{m === 'known_to_staff' ? 'I know them' : ID_LABEL[m]}</b>
+                        <span className="text-xs text-slate-500">
+                          {' '}
+                          {m === 'photo_id' ? 'name matches' : m === 'known_to_staff' ? 'collected before' : 'gave the parent’s password'}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <button className="btn btn-success w-full" disabled={!idMethod} onClick={() => choose(true)}>
                 Release {child?.name.split(' ')[0]}
               </button>
               <div className="flex gap-2">
@@ -708,7 +827,7 @@ function DoorPanel({
 
 // ---------------------------------------------------------------- manager
 
-function ManagerPanel({ world }: { world: World }) {
+function ManagerPanel({ world, refresh, prove }: { world: World; refresh: () => void; prove: (k: EvidenceKey) => void }) {
   const released = world.handovers.filter((h) => h.released)
   const refused = world.handovers.filter((h) => !h.released)
   const exceptions = world.checks.filter((k) => k.result !== 'valid')
@@ -754,7 +873,7 @@ function ManagerPanel({ world }: { world: World }) {
                   {h.released ? 'released to' : 'not released to'} {h.collector} ({h.relationship})
                   <span className="block text-xs text-slate-500">
                     Authorised by {h.authorisedBy} · {h.staff}
-                    {h.released && h.idChecked ? ' · ID checked' : ''}
+                    {h.released && h.idMethod ? ` · ID: ${ID_LABEL[h.idMethod].toLowerCase()}` : ''}
                     {h.reason ? ` · ${h.reason}` : ''}
                   </span>
                 </li>
@@ -795,9 +914,131 @@ function ManagerPanel({ world }: { world: World }) {
           </ul>
         </div>
       </div>
+      <div className="mt-6 grid gap-6 border-t border-slate-100 pt-5 lg:grid-cols-2">
+        <NeverRelease world={world} refresh={refresh} prove={prove} />
+        <Register world={world} refresh={refresh} prove={prove} />
+      </div>
       <p className="mt-5 text-xs text-slate-500">
         The record supports your safeguarding practice and evidence. It does not replace your own policies or your staff’s judgement.
       </p>
     </Panel>
+  )
+}
+
+function NeverRelease({ world, refresh, prove }: { world: World; refresh: () => void; prove: (k: EvidenceKey) => void }) {
+  const [form, setForm] = useState({ childId: 'leo', person: '', reason: 'court_order' as RestrictionReason })
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+  const add = (event: FormEvent) => {
+    event.preventDefault()
+    try {
+      const removed = restrict(world, form.childId, form.person, form.reason, '')
+      const child = world.children.find((c) => c.id === form.childId)!
+      setNote({
+        ok: true,
+        text: removed.length
+          ? `${form.person.trim()} is on ${child.name}’s list and has been removed as a collector.`
+          : `${form.person.trim()} is on ${child.name}’s list.`,
+      })
+      setForm({ ...form, person: '' })
+      if (removed.length) prove('restricted')
+      refresh()
+    } catch (err) {
+      setNote({ ok: false, text: err instanceof Refused ? err.message : 'That did not work.' })
+    }
+  }
+  return (
+    <div>
+      <h3 className="font-semibold text-ink">Never-release list</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Kept by the manager, for court orders and safeguarding concerns. Room leaders see these names with every check for the child, and parents cannot add them.
+      </p>
+      <ul className="mt-2 space-y-1 text-sm">
+        {world.restrictions.map((r) => (
+          <li key={r.id} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-red-950">
+            <b>{r.person}</b> for {world.children.find((c) => c.id === r.childId)?.name}{' '}
+            <span className="text-xs text-red-800">· {REASON_LABEL[r.reason]}{r.reference ? ` ${r.reference}` : ''}</span>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={add} className="mt-2 space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <select className="input" value={form.childId} onChange={(e) => setForm({ ...form, childId: e.target.value })}>
+            {world.children.map((c) => (
+              <option key={c.id} value={c.id}>
+                For {c.name.split(' ')[0]}
+              </option>
+            ))}
+          </select>
+          <select className="input" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value as RestrictionReason })}>
+            {(Object.keys(REASON_LABEL) as RestrictionReason[]).map((r) => (
+              <option key={r} value={r}>
+                {REASON_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <input className="input" placeholder="Full name, e.g. Dev Shah" value={form.person} onChange={(e) => setForm({ ...form, person: e.target.value })} />
+          <button className="btn btn-danger shrink-0">Add</button>
+        </div>
+      </form>
+      {note && <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${note.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>{note.text}</p>}
+    </div>
+  )
+}
+
+function Register({ world, refresh, prove }: { world: World; refresh: () => void; prove: (k: EvidenceKey) => void }) {
+  const [text, setText] = useState('')
+  const [lines, setLines] = useState<RegisterLine[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const compare = () => {
+    setError(null)
+    try {
+      setLines(reconcile(world, text))
+      prove('reconciled')
+      refresh()
+    } catch (err) {
+      setError(err instanceof Refused ? err.message : 'That did not work.')
+    }
+  }
+  return (
+    <div>
+      <h3 className="font-semibold text-ink">Sign-out register</h3>
+      <p className="mt-1 text-xs text-slate-500">
+        Each day the manager imports the sign-out register from the nursery’s own system, and Collector compares it with the door.
+      </p>
+      <textarea
+        className="input mt-2 min-h-24 font-mono text-xs"
+        placeholder={'Child,Signed out,Collected by\nLeo Shah,15:42,Lucy Shah'}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button type="button" className="btn btn-secondary text-xs" onClick={() => setText(sampleRegister(world))}>
+          Use today’s sample register
+        </button>
+        <button type="button" className="btn btn-primary text-xs" disabled={!text.trim()} onClick={compare}>
+          Compare with the door
+        </button>
+      </div>
+      {error && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">{error}</p>}
+      {lines && (
+        <ul className="mt-3 divide-y divide-slate-100 text-sm">
+          {lines.length === 0 && <li className="py-2 text-slate-500">Nobody signed out or released yet.</li>}
+          {lines.map((l, i) => (
+            <li key={`${l.child}-${i}`} className="py-2">
+              <b className="text-ink">{l.child}</b>{' '}
+              <span className="text-xs text-slate-500">
+                register {l.signedOut !== null ? hhmm(l.signedOut) : '—'}
+                {l.collectedBy ? `, ${l.collectedBy}` : ''} · door {l.released ? `${hhmm(l.released.at)}, ${l.released.collector}` : 'not released'}
+              </span>
+              <span className={`block text-xs font-semibold ${l.flags.length ? 'text-red-700' : 'text-emerald-700'}`}>
+                {l.flags.length ? l.flags.map((f) => FLAG_LABEL[f]).join(' · ') : '✓ Matches'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
