@@ -56,6 +56,18 @@ class Settings(BaseSettings):
     # for the company portal.
     SUPPORT_EMAIL: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _asyncpg_for_hosted_postgres(cls, data: object) -> object:
+        """Render (and Heroku-style hosts) give `postgres://`; use it as it is."""
+        if isinstance(data, dict):
+            url = data.get("DATABASE_URL")
+            if isinstance(url, str):
+                for prefix in ("postgres://", "postgresql://"):
+                    if url.startswith(prefix):
+                        data["DATABASE_URL"] = "postgresql+asyncpg://" + url[len(prefix) :]
+        return data
+
     @model_validator(mode="after")
     def _no_dev_secrets_in_production(self) -> Settings:
         if self.ENVIRONMENT in {"staging", "production"}:
