@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 import { ThemeToggle } from '@/components/ThemeToggle'
 
@@ -66,6 +67,7 @@ export function SiteLayout({ children }: { children: ReactNode }) {
             <p className="font-semibold text-white">Company</p>
             <Link to="/privacy" className="block hover:text-white">Privacy and data protection</Link>
             <a href="/#contact" className="block hover:text-white">Contact us</a>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="block hover:text-white">{SUPPORT_EMAIL}</a>
           </div>
         </div>
         <p className="border-t border-white/10 px-4 py-4 text-center text-xs">

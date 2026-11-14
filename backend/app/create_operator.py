@@ -4,7 +4,7 @@ Deliberately not possible over the API: an endpoint that could make an
 operator would be worth attacking, and having a shell on the server is the
 same bar as having the database.
 
-    python -m app.create_operator --email you@entraccess.co.uk --name "Your Name"
+    python -m app.create_operator --email you@entraccess-collector.co.uk --name "Your Name"
 
 The password is prompted for, so it never reaches an argument list, an
 environment variable or the shell history.

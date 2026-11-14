@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 import { SiteLayout } from '@/components/SiteLayout'
 import { Alert } from '@/components/ui'
@@ -190,6 +191,13 @@ export function Website() {
         <p className="mt-2 max-w-2xl text-blue-100">
           Tell us about your setting. We will reply within two working days, and can show you a demo first. We
           never ask for children’s or families’ details by email.
+        </p>
+        <p className="mt-2 text-blue-100">
+          Or email us at{' '}
+          <a className="font-semibold text-white underline underline-offset-2" href={`mailto:${SUPPORT_EMAIL}`}>
+            {SUPPORT_EMAIL}
+          </a>
+          .
         </p>
         <Enquiry />
         </div>

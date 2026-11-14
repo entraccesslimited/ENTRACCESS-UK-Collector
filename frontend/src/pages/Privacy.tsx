@@ -1,4 +1,5 @@
 import { SiteLayout } from '@/components/SiteLayout'
+import { SUPPORT_EMAIL } from '@/lib/contact'
 
 const HELD = [
   ['Children', 'Name and room', 'To know which child a collection is for'],
@@ -25,6 +26,7 @@ export function Privacy() {
             <div><dt className="text-slate-500">ICO registration</dt><dd>[ICO REGISTRATION NUMBER]</dd></div>
             <div><dt className="text-slate-500">Law</dt><dd>UK GDPR and the Data Protection Act 2018</dd></div>
             <div><dt className="text-slate-500">Our role</dt><dd>Processor for each nursery; controller for our own records</dd></div>
+            <div className="sm:col-span-2"><dt className="text-slate-500">Contact</dt><dd><a className="text-brand-700 underline" href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></dd></div>
           </dl>
         </div>
 
@@ -74,7 +76,9 @@ export function Privacy() {
         <h2 className="mt-8 text-xl font-semibold text-ink">Your rights</h2>
         <p className="mt-2">
           You may ask what is held about you, ask for a correction or erasure, or object to processing. Parents: ask your
-          nursery first; they hold the record and can act on it at once. If you are not satisfied, you can complain to the{' '}
+          nursery first; they hold the record and can act on it at once. You can also write to us at{' '}
+          <a className="text-brand-700 underline" href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>. If you are not
+          satisfied, you can complain to the{' '}
           <a className="text-brand-700 underline" href="https://ico.org.uk/make-a-complaint/">Information Commissioner’s Office</a>.
         </p>
 

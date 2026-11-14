@@ -166,6 +166,11 @@ cd frontend && npm run typecheck && npm test && npm run build
 
 ## Production
 
+Collector's domain is **entraccess-collector.co.uk**, and its mailbox is
+**support@entraccess-collector.co.uk** (Zoho Mail UK). In production set
+`APP_BASE_URL=https://entraccess-collector.co.uk`, `EMAIL_ENABLED=true`, the
+Zoho SMTP values and `SUPPORT_EMAIL` shown in `.env.example`.
+
 Set `ENVIRONMENT=production`, a `DATABASE_URL` for Postgres, and long random
 `SECRET_KEY` and `PASS_SIGNING_KEY` values. The app refuses to start in
 production with the development keys. Changing `PASS_SIGNING_KEY` invalidates
