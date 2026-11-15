@@ -8,6 +8,8 @@ plain cross-site form cannot set.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -79,3 +81,54 @@ def read_session(token: str) -> tuple[str, uuid.UUID] | None:
         return str(claims["kind"]), uuid.UUID(str(claims["sub"]))
     except (KeyError, ValueError):
         return None
+
+
+# What an invited account holds instead of a password hash. Not a hash of
+# anything: argon2 cannot parse it, so `verify_password` fails closed and the
+# account cannot be signed into until its owner chooses a password.
+INVITED = "!invited"
+
+# How long a link lasts. An invitation waits for somebody to notice it among
+# a week's mail; a reset is for somebody standing at the sign-in page now.
+INVITE_LINK = timedelta(days=7)
+RESET_LINK = timedelta(hours=1)
+
+
+def _fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+
+
+def issue_password_link(user_id: uuid.UUID, password_hash: str, lifetime: timedelta) -> str:
+    """A token that lets one person choose one new password, once.
+
+    Single use with no table to track it: the token carries a fingerprint of
+    the password hash it was issued against. Choosing a password changes the
+    hash, so the same link — or any older one — no longer matches.
+    """
+    now = datetime.now(UTC)
+    claims = {
+        "sub": str(user_id),
+        "pw": _fingerprint(password_hash),
+        "iat": int(now.timestamp()),
+        "exp": int((now + lifetime).timestamp()),
+        "typ": "set-password",
+    }
+    return jwt.encode(claims, get_settings().SECRET_KEY, algorithm="HS256")
+
+
+def read_password_link(token: str) -> tuple[uuid.UUID, str] | None:
+    """The account a link is for, and the fingerprint it must still match."""
+    try:
+        claims = jwt.decode(token, get_settings().SECRET_KEY, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    if claims.get("typ") != "set-password":
+        return None
+    try:
+        return uuid.UUID(str(claims["sub"])), str(claims["pw"])
+    except (KeyError, ValueError):
+        return None
+
+
+def link_still_fits(fingerprint: str, password_hash: str) -> bool:
+    return hmac.compare_digest(fingerprint, _fingerprint(password_hash))

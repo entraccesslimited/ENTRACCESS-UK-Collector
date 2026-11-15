@@ -49,6 +49,7 @@ async def engine(tmp_path: Path) -> AsyncIterator[object]:
     db.use_engine(engine)
     OUTBOX.messages.clear()
     auth_router._failures.clear()
+    auth_router._resets.clear()
     public_router._enquiries.clear()
     yield engine
     await engine.dispose()

@@ -107,4 +107,30 @@ async def enquire(body: EnquiryIn, request: Request, session: SessionDep) -> dic
             ),
             reply_to=enquiry.email,
         )
+    # The nursery hears back at once, so silence is never their only answer.
+    # Their own words are not quoted back: anybody can type anybody's address
+    # into a public form, and quoting the message would let a stranger post
+    # text of their choosing to someone else's inbox from our domain.
+    await send(
+        enquiry.email,
+        "We have your enquiry — ENTRACCESS UK Collector",
+        "\n".join(
+            [
+                f"Hello {enquiry.contact_name},",
+                "",
+                f"Thank you for getting in touch about {enquiry.nursery_name}. Your enquiry "
+                "has reached the ENTRACCESS UK team, and we will reply to this address "
+                "within two working days.",
+                "",
+                "If there is anything you would like to add, just reply to this email.",
+                "",
+                "If you did not send this, you can ignore it. Nothing has been set up, and "
+                "we will not contact you again unless you ask.",
+                "",
+                "--",
+                "ENTRACCESS UK Collector · https://entraccess-collector.co.uk",
+            ]
+        ),
+        reply_to=support,
+    )
     return thanks

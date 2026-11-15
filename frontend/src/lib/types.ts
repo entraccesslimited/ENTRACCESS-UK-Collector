@@ -140,6 +140,8 @@ export interface Person {
   phone: string | null
   role: Role
   active: boolean
+  /** Invited by email and has not chosen a password yet, so cannot sign in. */
+  invitation_pending?: boolean
 }
 
 export interface Link {

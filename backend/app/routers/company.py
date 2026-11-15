@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.accounts import send_invitation, send_welcome
 from app.deps import CurrentOperator, SessionDep
 from app.models import (
     AuditEvent,
@@ -32,7 +33,7 @@ from app.models import (
     User,
 )
 from app.schemas import CompanyOverview, EnquiryOut, NewNursery, NurseryRow
-from app.security import hash_password, password_problem
+from app.security import INVITED, hash_password, password_problem
 
 router = APIRouter(prefix="/company", tags=["company"])
 
@@ -143,24 +144,32 @@ async def add_nursery(
         await session.scalar(select(Operator).where(func.lower(Operator.email) == email))
     ):
         raise HTTPException(status.HTTP_409_CONFLICT, "Someone already uses that email address.")
-    problem = password_problem(body.manager_password)
-    if problem:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
+    if body.manager_password is not None:
+        problem = password_problem(body.manager_password)
+        if problem:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
 
     nursery = Nursery(name=body.name.strip(), slug=slug, timezone="Europe/London")
     session.add(nursery)
     await session.flush()
-    session.add(
-        User(
-            nursery_id=nursery.id,
-            email=email,
-            full_name=body.manager_name.strip(),
-            role=Role.ADMIN,
-            password_hash=hash_password(body.manager_password),
-        )
+    manager = User(
+        nursery_id=nursery.id,
+        email=email,
+        full_name=body.manager_name.strip(),
+        role=Role.ADMIN,
+        # Without a password the manager chooses their own from an emailed
+        # link, so the company never knows the nursery's admin password.
+        password_hash=(
+            INVITED if body.manager_password is None else hash_password(body.manager_password)
+        ),
     )
+    session.add(manager)
     session.add(_log(operator, nursery, "nursery.created", f"first manager {email}"))
     await session.flush()
+    if body.manager_password is None:
+        await send_invitation(manager, nursery)
+    else:
+        await send_welcome(manager, nursery)
     return next(r for r in await nurseries(operator, session) if r.id == nursery.id)
 
 

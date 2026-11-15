@@ -29,6 +29,23 @@ class SignIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class SetPassword(BaseModel):
+    token: str = Field(min_length=10, max_length=2000)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class PasswordLinkInfo(BaseModel):
+    """Who a link is for, so the page can greet them before they type."""
+
+    full_name: str
+    email: str
+    first_time: bool
+
+
 class Me(Out):
     id: uuid.UUID
     email: str
@@ -223,7 +240,9 @@ class PersonIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=200)
     phone: str | None = Field(default=None, max_length=40)
     role: Role
-    password: str = Field(min_length=10, max_length=200)
+    # Left out, they are emailed a link to choose their own — nobody else then
+    # knows it. Given, it is a first password the manager hands over in person.
+    password: str | None = Field(default=None, min_length=10, max_length=200)
 
 
 class PersonOut(Out):
@@ -233,6 +252,8 @@ class PersonOut(Out):
     phone: str | None
     role: Role
     active: bool
+    # Invited by email and has not chosen a password yet, so cannot sign in.
+    invitation_pending: bool = False
 
 
 class LinkIn(BaseModel):
@@ -281,7 +302,9 @@ class NewNursery(BaseModel):
     slug: str = Field(min_length=3, max_length=50, examples=["little-acorns-sheffield"])
     manager_name: str = Field(min_length=2, max_length=200)
     manager_email: EmailStr
-    manager_password: str = Field(min_length=10, max_length=200)
+    # Left out, the manager is emailed a link to choose their own password,
+    # so the company never knows it.
+    manager_password: str | None = Field(default=None, min_length=10, max_length=200)
 
 
 UK_REGIONS: tuple[str, ...] = (

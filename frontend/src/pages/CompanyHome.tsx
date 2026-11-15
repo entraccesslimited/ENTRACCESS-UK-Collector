@@ -100,20 +100,27 @@ export function CompanyHome() {
         {list.data?.length === 0 && <p className="p-4 text-sm text-slate-500">No nurseries yet.</p>}
       </section>
 
-      <AddNursery onAdded={async (name) => {
-        setMessage(`${name} is set up. Give the manager their password in person or by phone; they add everyone else.`)
+      <AddNursery onAdded={async (name, invited) => {
+        setMessage(
+          invited
+            ? `${name} is set up. The manager has been emailed a link to choose their password; they add everyone else.`
+            : `${name} is set up. The manager has been emailed where to sign in. Give them their password in person or by phone; they add everyone else.`,
+        )
         await reload()
       }} />
     </>
   )
 }
 
-function AddNursery({ onAdded }: { onAdded: (name: string) => Promise<void> }) {
+function AddNursery({ onAdded }: { onAdded: (name: string, invited: boolean) => Promise<void> }) {
   const blank = { name: '', slug: '', manager_name: '', manager_email: '', manager_password: '' }
   const [form, setForm] = useState(blank)
   const [slugTouched, setSlugTouched] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // By default the manager chooses their own password from an emailed link,
+  // so ENTRACCESS UK never knows the nursery's admin password.
+  const [setItMyself, setSetItMyself] = useState(false)
 
   const slugify = (name: string) =>
     name
@@ -128,11 +135,17 @@ function AddNursery({ onAdded }: { onAdded: (name: string) => Promise<void> }) {
     setBusy(true)
     setError(null)
     try {
-      await api('/company/nurseries', { method: 'POST', json: form })
+      const { manager_password, ...rest } = form
+      await api('/company/nurseries', {
+        method: 'POST',
+        json: setItMyself ? { ...rest, manager_password } : rest,
+      })
       const name = form.name
+      const invited = !setItMyself
       setForm(blank)
       setSlugTouched(false)
-      await onAdded(name)
+      setSetItMyself(false)
+      await onAdded(name, invited)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not set the nursery up.')
     } finally {
@@ -175,20 +188,33 @@ function AddNursery({ onAdded }: { onAdded: (name: string) => Promise<void> }) {
         <span className="label">First manager’s email</span>
         <input className="input" type="email" value={form.manager_email} onChange={(e) => setForm({ ...form, manager_email: e.target.value })} required />
       </label>
-      <label className="sm:col-span-2">
-        <span className="label">Starting password for the manager (at least 10 characters)</span>
-        <input
-          className="input"
-          type="text"
-          autoComplete="new-password"
-          value={form.manager_password}
-          onChange={(e) => setForm({ ...form, manager_password: e.target.value })}
-          minLength={10}
-          required
-        />
+      <label className="flex items-start gap-2 text-sm sm:col-span-2">
+        <input type="checkbox" className="mt-1" checked={setItMyself} onChange={(e) => setSetItMyself(e.target.checked)} />
+        <span>
+          Set a starting password for the manager myself
+          <span className="block text-xs text-slate-500">
+            {setItMyself
+              ? 'They are emailed where to sign in, never the password. Give it to them yourself.'
+              : 'Left unticked, the manager is emailed a link to choose their own password.'}
+          </span>
+        </span>
       </label>
+      {setItMyself && (
+        <label className="sm:col-span-2">
+          <span className="label">Starting password for the manager (at least 10 characters)</span>
+          <input
+            className="input"
+            type="text"
+            autoComplete="new-password"
+            value={form.manager_password}
+            onChange={(e) => setForm({ ...form, manager_password: e.target.value })}
+            minLength={10}
+            required
+          />
+        </label>
+      )}
       <div className="sm:col-span-2">
-        <button className="btn btn-primary" disabled={busy || form.manager_password.length < 10}>
+        <button className="btn btn-primary" disabled={busy || (setItMyself && form.manager_password.length < 10)}>
           {busy ? 'Setting up…' : 'Set up nursery'}
         </button>
       </div>

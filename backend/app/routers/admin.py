@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app import collection, geofence
+from app.accounts import send_invitation, send_welcome
 from app.deps import AdminUser, SessionDep
 from app.models import (
     AuditEvent,
@@ -45,7 +46,7 @@ from app.schemas import (
     RestrictionOut,
     TodayOut,
 )
-from app.security import hash_password, password_problem
+from app.security import INVITED, hash_password, password_problem
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -438,9 +439,16 @@ async def people(admin: AdminUser, session: SessionDep) -> list[User]:
 
 @router.post("/people", response_model=PersonOut, status_code=status.HTTP_201_CREATED)
 async def add_person(body: PersonIn, admin: AdminUser, session: SessionDep) -> User:
-    problem = password_problem(body.password)
-    if problem:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
+    """Add a parent or member of staff, and tell them by email.
+
+    With no password they are invited to choose their own, which is the
+    better way: the manager never knows it. With one, they are told where to
+    sign in, and the manager hands the password over in person.
+    """
+    if body.password is not None:
+        problem = password_problem(body.password)
+        if problem:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
     existing = await session.scalar(
         select(User).where(func.lower(User.email) == body.email.lower())
     )
@@ -452,7 +460,7 @@ async def add_person(body: PersonIn, admin: AdminUser, session: SessionDep) -> U
         full_name=body.full_name.strip(),
         phone=body.phone,
         role=body.role,
-        password_hash=hash_password(body.password),
+        password_hash=INVITED if body.password is None else hash_password(body.password),
     )
     session.add(user)
     try:
@@ -466,6 +474,44 @@ async def add_person(body: PersonIn, admin: AdminUser, session: SessionDep) -> U
         action="person.added",
         subject_id=user.id,
         detail=body.role.value,
+    )
+    nursery = await collection.nursery_of(session, admin)
+    if body.password is None:
+        await send_invitation(user, nursery)
+    else:
+        await send_welcome(user, nursery)
+    return user
+
+
+@router.post("/people/{user_id}/resend-invitation", response_model=PersonOut)
+async def resend_invitation(user_id: uuid.UUID, admin: AdminUser, session: SessionDep) -> User:
+    """Send the link again to somebody who has not chosen a password yet.
+
+    Refused once they have one: a set-password link for a working account
+    would be a way to take it over. They can use "Forgot your password?".
+    """
+    user = await session.scalar(
+        select(User).where(User.id == user_id, User.nursery_id == admin.nursery_id)
+    )
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such person.")
+    if not user.invitation_pending:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{user.full_name} has already chosen a password. "
+            'They can use "Forgot your password?" on the sign-in page.',
+        )
+    if not user.active:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Switch the account back on before inviting them again."
+        )
+    await send_invitation(user, await collection.nursery_of(session, admin))
+    await collection.audit(
+        session,
+        nursery_id=admin.nursery_id,
+        actor=admin,
+        action="person.reinvited",
+        subject_id=user.id,
     )
     return user
 

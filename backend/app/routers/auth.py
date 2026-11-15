@@ -9,15 +9,21 @@ from typing import Annotated
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 
+from app.accounts import send_invitation, send_reset
 from app.config import get_settings
 from app.deps import SessionDep
 from app.models import Nursery, Operator, Role, User
-from app.schemas import Me, SignIn
+from app.schemas import ForgotPassword, Me, PasswordLinkInfo, SetPassword, SignIn
 from app.security import (
     COOKIE_NAME,
+    INVITED,
     OPERATOR,
     USER,
+    hash_password,
     issue_session,
+    link_still_fits,
+    password_problem,
+    read_password_link,
     read_session,
     verify_password,
 )
@@ -139,4 +145,90 @@ async def me(
     nursery = await session.get(Nursery, user.nursery_id) if user else None
     if user is None or not user.active or nursery is None or not nursery.active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Please sign in.")
+    return _me(user, nursery)
+
+
+# Reset requests per email, kept in memory like failed sign-ins. Three an hour
+# is plenty for a person and too few to use this to flood somebody's inbox.
+MAX_RESETS = 3
+RESET_WINDOW = timedelta(hours=1)
+_resets: dict[str, list[datetime]] = defaultdict(list)
+
+_DEAD_LINK = "That link has expired or has already been used. Ask for a new one."
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+async def forgot_password(body: ForgotPassword, session: SessionDep) -> dict[str, str]:
+    """Email a link to choose a new password.
+
+    The answer is the same whether or not the address has an account, so this
+    cannot be used to find out who uses the service. Operators are not served
+    here: their accounts are made and mended from a shell.
+    """
+    email = body.email.lower()
+    now = datetime.now(UTC)
+    recent = [t for t in _resets[email] if now - t < RESET_WINDOW]
+    _resets[email] = recent
+    answer = {"message": "If that address has an account, a link is on its way."}
+    if len(recent) >= MAX_RESETS:
+        return answer
+    _resets[email].append(now)
+    user = await session.scalar(select(User).where(func.lower(User.email) == email))
+    if user is None or not user.active:
+        return answer
+    nursery = await session.get(Nursery, user.nursery_id)
+    if nursery is None or not nursery.active:
+        return answer
+    if user.password_hash == INVITED:
+        # Never chose one, so there is nothing to reset: what they need is the
+        # invitation again, and a fresh one does exactly that.
+        await send_invitation(user, nursery)
+    else:
+        await send_reset(user)
+    return answer
+
+
+async def _link_owner(session: SessionDep, token: str) -> User:
+    found = read_password_link(token)
+    user = await session.get(User, found[0]) if found else None
+    if (
+        found is None
+        or user is None
+        or not user.active
+        or not link_still_fits(found[1], user.password_hash)
+    ):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, _DEAD_LINK)
+    return user
+
+
+@router.get("/set-password", response_model=PasswordLinkInfo)
+async def check_password_link(token: str, session: SessionDep) -> PasswordLinkInfo:
+    """Who a link is for, so the page can say so before they type anything."""
+    user = await _link_owner(session, token)
+    return PasswordLinkInfo(
+        full_name=user.full_name, email=user.email, first_time=user.password_hash == INVITED
+    )
+
+
+@router.post("/set-password", response_model=Me)
+async def set_password(body: SetPassword, response: Response, session: SessionDep) -> Me:
+    """Choose a password from an emailed link, and be signed in with it."""
+    user = await _link_owner(session, body.token)
+    problem = password_problem(body.password)
+    if problem:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, problem)
+    nursery = await session.get(Nursery, user.nursery_id)
+    if nursery is None or not nursery.active:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "This nursery's account is suspended. Please contact ENTRACCESS UK.",
+        )
+    # Changing the hash is what makes this link, and any older one, stop working.
+    user.password_hash = hash_password(body.password)
+    await session.flush()
+    _failures.pop(user.email.lower(), None)
+    lifetime = (
+        timedelta(days=get_settings().PARENT_SESSION_DAYS) if user.role is Role.PARENT else None
+    )
+    _set_cookie(response, issue_session(user.id, USER, lifetime=lifetime), lifetime)
     return _me(user, nursery)

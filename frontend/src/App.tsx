@@ -24,6 +24,7 @@ import { ParentHistory } from '@/pages/ParentHistory'
 import { ParentHome } from '@/pages/ParentHome'
 import { PublicPass } from '@/pages/PublicPass'
 import { SignIn } from '@/pages/SignIn'
+import { SetPassword } from '@/pages/SetPassword'
 
 function Guard({ roles, children }: { roles: Role[]; children: JSX.Element }) {
   const { me, loading } = useSession()
@@ -55,6 +56,7 @@ export function App() {
       <Route path="/prototype" element={<Prototype />} />
       <Route path="/portals" element={<Welcome />} />
       <Route path="/sign-in" element={<SignIn />} />
+      <Route path="/set-password" element={<SetPassword />} />
       <Route path="/pass/:token" element={<PublicPass />} />
       <Route element={<Guard roles={['parent', 'staff', 'admin', 'operator']}><Layout /></Guard>}>
         <Route path="/parent" element={<Guard roles={['parent']}><ParentHome /></Guard>} />

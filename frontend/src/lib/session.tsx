@@ -7,6 +7,8 @@ interface SessionState {
   me: Me | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<Me>
+  /** Choose a password from an emailed link; the API signs them in with it. */
+  setPassword: (token: string, password: string) => Promise<Me>
   signOut: () => Promise<void>
 }
 
@@ -31,13 +33,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return user
   }, [])
 
+  const setPassword = useCallback(async (token: string, password: string) => {
+    const user = await api<Me>('/auth/set-password', { method: 'POST', json: { token, password } })
+    setMe(user)
+    return user
+  }, [])
+
   const signOut = useCallback(async () => {
     await api('/auth/sign-out', { method: 'POST' }).catch(() => undefined)
     setMe(null)
   }, [])
 
   return (
-    <SessionContext.Provider value={{ me, loading, signIn, signOut }}>{children}</SessionContext.Provider>
+    <SessionContext.Provider value={{ me, loading, signIn, setPassword, signOut }}>{children}</SessionContext.Provider>
   )
 }
 

@@ -206,6 +206,13 @@ class User(Base):
 
     nursery: Mapped[Nursery] = relationship()
 
+    @property
+    def invitation_pending(self) -> bool:
+        """Invited by email, and has not yet chosen a password."""
+        # Spelled out rather than imported: security imports nothing from
+        # here, and the value is fixed by every account already holding it.
+        return self.password_hash == "!invited"
+
 
 class Child(Base):
     __tablename__ = "children"
