@@ -61,7 +61,10 @@ export function SiteLayout({ children }: { children: ReactNode }) {
             <p className="font-display font-extrabold tracking-wide text-white">
               ENTRACCESS <span className="text-brand-500">UK</span> Collector
             </p>
-            <p className="mt-1">Every handover, authorised. Safe, recorded child collection for UK nurseries.</p>
+            <p className="mt-1">Every handover, authorised. Safe, recorded child collection for UK nurseries and primary schools.</p>
+            <p className="mt-1">
+              For secondary schools, see <a href="https://entraccess.co.uk" className="underline hover:text-white">ENTRACCESS UK</a>.
+            </p>
           </div>
           <div className="space-y-1">
             <p className="font-semibold text-white">Company</p>

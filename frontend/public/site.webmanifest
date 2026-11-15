@@ -2,7 +2,7 @@
   "id": "/app/site",
   "name": "ENTRACCESS UK Collector",
   "short_name": "Collector",
-  "description": "Safe, recorded child collection for UK nurseries.",
+  "description": "Safe, recorded child collection for UK nurseries and primary schools.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -4,8 +4,8 @@ import { homeFor, PORTALS, useSession, type PortalKey } from '@/lib/session'
 
 const BLURB: Record<PortalKey, string> = {
   parent: 'Authorise who collects your child, send them their pass, and see every collection.',
-  nursery: 'Managers and room leaders: check collectors at the door, and keep the handover record.',
-  company: 'ENTRACCESS UK: set nurseries up and see how each is running.',
+  nursery: 'Managers and staff: check collectors at the door, and keep the handover record.',
+  company: 'ENTRACCESS UK: set nurseries and schools up and see how each is running.',
 }
 
 /** The front door: three portals, one sign-in. */

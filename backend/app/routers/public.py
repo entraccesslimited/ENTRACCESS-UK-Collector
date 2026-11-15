@@ -96,7 +96,7 @@ async def enquire(body: EnquiryIn, request: Request, session: SessionDep) -> dic
                 f"{label}: {value}"
                 for label, value in (
                     ("From", f"{enquiry.contact_name} <{enquiry.email}>"),
-                    ("Nursery", enquiry.nursery_name),
+                    ("Nursery or school", enquiry.nursery_name),
                     ("Phone", enquiry.phone),
                     ("Region", enquiry.region),
                     ("Children", enquiry.children),
