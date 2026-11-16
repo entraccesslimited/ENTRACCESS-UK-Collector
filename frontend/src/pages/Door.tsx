@@ -128,13 +128,18 @@ function EnterCode({ fenced, onChecked }: { fenced: boolean; onChecked: (check: 
   const [filter, setFilter] = useState('')
 
   const visible = (children.data ?? []).filter((c) => c.full_name.toLowerCase().includes(filter.toLowerCase()))
+  // React shows the first child as selected whenever the chosen one is not in
+  // the list (nothing picked yet, or filtered out), and clicking an option that
+  // already looks selected fires no change. So the child staff can see
+  // highlighted is the one checked, rather than a disabled button.
+  const chosen = visible.some((c) => c.id === childId) ? childId : (visible[0]?.id ?? '')
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
     try {
       onChecked(
-        await api<Check>('/door/check/code', { method: 'POST', json: { child_id: childId, code, ...(await where(fenced)) } }),
+        await api<Check>('/door/check/code', { method: 'POST', json: { child_id: chosen, code, ...(await where(fenced)) } }),
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not check the code.')
@@ -147,7 +152,7 @@ function EnterCode({ fenced, onChecked }: { fenced: boolean; onChecked: (check: 
       <label className="block">
         <span className="label">Child being collected</span>
         <input className="input mb-2" placeholder="Search by name" value={filter} onChange={(e) => setFilter(e.target.value)} />
-        <select className="input" value={childId} onChange={(e) => setChildId(e.target.value)} required size={Math.min(6, Math.max(2, visible.length))}>
+        <select className="input" value={chosen} onChange={(e) => setChildId(e.target.value)} required size={Math.min(6, Math.max(2, visible.length))}>
           {visible.map((c) => (
             <option key={c.id} value={c.id}>
               {c.full_name}
@@ -168,7 +173,7 @@ function EnterCode({ fenced, onChecked }: { fenced: boolean; onChecked: (check: 
           required
         />
       </label>
-      <button className="btn btn-primary w-full" disabled={!childId || code.replace(/\D/g, '').length !== 6}>
+      <button className="btn btn-primary w-full" disabled={!chosen || code.replace(/\D/g, '').length !== 6}>
         Check code
       </button>
     </form>
