@@ -179,6 +179,27 @@ every pass and code in circulation.
 Before any pilot with real children's data: complete a data protection impact
 assessment, register with the ICO, and sign a pilot agreement with the setting.
 
+## Maintenance jobs
+
+Run these on the live service as a Render one-off job
+(entraccess-collector-api → Jobs), or by hand in its Shell tab. Write a job's
+command on one line with no quote marks: Render passes quotes through
+literally, so a command such as `python -c "..."` runs nothing and still
+reports success.
+
+| Job | Command |
+|---|---|
+| Check the mail settings work | `python -m app.maintenance.send_test_email --to support@entraccess-collector.co.uk` |
+| List what a test run left behind | `python -m app.maintenance.purge_test_accounts --domain collector-e2e.example.com` |
+| Remove it | the same, with `--yes` on the end |
+| Add a company-portal operator | `python -m app.create_operator --email you@entraccess-collector.co.uk --name "Your Name"` in the **Shell tab** (it asks for the password) |
+
+`send_test_email` exits with an error when the message is refused or mail is
+switched off, so a failed send shows as a failed job. `purge_test_accounts`
+only accepts a reserved test domain (example.com and its subdomains, `.test`,
+`.invalid`), removes a nursery only when every account in it is at that
+domain, and stops if more than 20 accounts match.
+
 ## Layout
 
 ```
