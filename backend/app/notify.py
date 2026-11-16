@@ -32,6 +32,19 @@ class Outbox:
 
 OUTBOX = Outbox()
 
+# Names kept for documentation and testing (RFC 2606 and RFC 6761). No mailbox
+# can exist at any of them, so a message to one can only bounce, and bounces
+# cost the relay's goodwill for the mail that matters.
+_RESERVED_TOP_LEVEL = frozenset({"example", "test", "invalid", "localhost", "local"})
+_RESERVED_DOMAINS = frozenset({"example.com", "example.net", "example.org"})
+
+
+def reserved_address(address: str) -> bool:
+    """Whether an address is at a domain that can never receive mail."""
+    domain = address.rpartition("@")[2].strip().rstrip(".").lower()
+    labels = domain.split(".")
+    return labels[-1] in _RESERVED_TOP_LEVEL or ".".join(labels[-2:]) in _RESERVED_DOMAINS
+
 
 def _compose(handover: Handover, nursery: Nursery, to: str) -> EmailMessage:
     when = handover.occurred_at.astimezone(ZoneInfo(nursery.timezone)).strftime("%H:%M on %d %b")
@@ -71,6 +84,9 @@ async def send(to: str, subject: str, body: str, *, reply_to: str | None = None)
     if not settings.EMAIL_ENABLED:
         OUTBOX.messages.append(message)
         return
+    if reserved_address(to):
+        log.info("email not sent to a reserved address: %s", subject)
+        return
     try:
         await aiosmtplib.send(
             message,
@@ -101,6 +117,9 @@ async def notify_parents(session: AsyncSession, handover: Handover) -> None:
         if not settings.EMAIL_ENABLED:
             OUTBOX.messages.append(message)
             log.info("email not sent (EMAIL_ENABLED is off): %s", message["Subject"])
+            continue
+        if reserved_address(parent.email):
+            log.info("email not sent to a reserved address: %s", message["Subject"])
             continue
         try:
             await aiosmtplib.send(
