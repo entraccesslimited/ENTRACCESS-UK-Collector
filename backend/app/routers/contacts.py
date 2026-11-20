@@ -5,19 +5,20 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import select
 
-from app import collection, contacts
+from app import collection, contacts, photos
 from app.deps import AdminUser, SessionDep
 from app.models import Authorisation, CollectorKind, CollectorSource
-from app.routers.parent import authorisation_out, pass_out, record_shared
+from app.routers.parent import authorisation_out, pass_out, photo_response, record_shared
 from app.schemas import (
     AuthorisationOut,
     ContactImportIn,
     ContactImportOut,
     ContactIn,
     PassOut,
+    PhotoIn,
     SharedIn,
 )
 
@@ -104,3 +105,26 @@ async def contact_shared(
     authorisation_id: uuid.UUID, body: SharedIn, admin: AdminUser, session: SessionDep
 ) -> None:
     await record_shared(session, admin, await _contact(session, admin, authorisation_id), body)
+
+
+@router.get("/collectors/{authorisation_id}/photo")
+async def contact_photo(
+    authorisation_id: uuid.UUID, admin: AdminUser, session: SessionDep
+) -> Response:
+    return await photo_response(session, await _contact(session, admin, authorisation_id))
+
+
+@router.put("/collectors/{authorisation_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def contact_photo_put(
+    authorisation_id: uuid.UUID, body: PhotoIn, admin: AdminUser, session: SessionDep
+) -> None:
+    await photos.save(
+        session, admin, await _contact(session, admin, authorisation_id), body.data_url
+    )
+
+
+@router.delete("/collectors/{authorisation_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def contact_photo_delete(
+    authorisation_id: uuid.UUID, admin: AdminUser, session: SessionDep
+) -> None:
+    await photos.remove(session, admin, await _contact(session, admin, authorisation_id))

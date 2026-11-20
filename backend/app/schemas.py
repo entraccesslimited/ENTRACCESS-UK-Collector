@@ -9,6 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models import (
+    AbsenceReason,
     CheckMethod,
     CheckResult,
     CollectorKind,
@@ -59,6 +60,7 @@ class ChildOut(Out):
     full_name: str
     room: str | None
     active: bool
+    session_days: str = "12345"
 
 
 class AuthorisationIn(BaseModel):
@@ -90,6 +92,7 @@ class AuthorisationOut(Out):
     status: CheckResult
     authorised_by_name: str
     source: CollectorSource = CollectorSource.PARENT
+    has_photo: bool = False
 
 
 class PassOut(BaseModel):
@@ -181,6 +184,8 @@ class CheckOut(BaseModel):
     kind: CollectorKind | None = None
     valid_until: datetime | None = None
     restrictions: list[RestrictionAtDoor] = Field(default_factory=list)
+    # A photo of the collector, from GET /door/checks/{check_id}/photo.
+    has_photo: bool = False
 
 
 class DecisionIn(BaseModel):
@@ -223,11 +228,109 @@ class DoorCheckOut(BaseModel):
     distance_m: float | None = None
 
 
+class NonArrivalRunOut(Out):
+    day: date
+    ran_at: datetime
+    expected: int
+    missing: int
+    alerted: int
+    suppressed_reason: str | None
+
+
 class TodayOut(BaseModel):
     released: int
     refused: int
     exceptions: int
     active_collectors: int
+    # The arrival register for today.
+    expected: int = 0
+    arrived: int = 0
+    absent: int = 0
+    not_arrived: list[str] = Field(default_factory=list)
+    arrival_alert_at: time | None = None
+    alert_run: NonArrivalRunOut | None = None
+
+
+class PhotoIn(BaseModel):
+    """A photo as a `data:` URL, already shrunk on the phone."""
+
+    data_url: str = Field(min_length=20, max_length=420_000)
+
+
+class ChildUpdateIn(BaseModel):
+    room: str | None = Field(default=None, max_length=80)
+    # ISO weekday numbers, Monday 1 to Sunday 7: "12345" is Monday to Friday.
+    session_days: str | None = Field(default=None, min_length=1, max_length=7)
+
+
+class AbsenceIn(BaseModel):
+    day: date
+    reason: AbsenceReason
+    note: str | None = Field(default=None, max_length=300)
+
+
+class AbsenceOut(Out):
+    id: uuid.UUID
+    child_id: uuid.UUID
+    day: date
+    reason: AbsenceReason
+    note: str | None
+    created_at: datetime
+
+
+class StaffAbsenceIn(AbsenceIn):
+    child_id: uuid.UUID
+
+
+class RegisterChildOut(BaseModel):
+    child_id: uuid.UUID
+    full_name: str
+    room: str | None
+    expected: bool
+    arrived_at: datetime | None = None
+    arrived_offline: bool = False
+    absence_reason: AbsenceReason | None = None
+    absence_note: str | None = None
+    collected_at: datetime | None = None
+    collected_by: str | None = None
+
+
+class RegisterOut(BaseModel):
+    day: date
+    children: list[RegisterChildOut]
+    arrival_alert_at: time | None = None
+
+
+class ArrivalIn(BaseModel):
+    child_id: uuid.UUID
+    # Set by a phone sending a mark it made without signal: when it was made.
+    occurred_at: datetime | None = None
+    client_id: str | None = Field(default=None, min_length=8, max_length=64)
+
+
+class RegisterSyncIn(BaseModel):
+    marks: list[ArrivalIn] = Field(max_length=500)
+
+
+class RegisterSyncResult(BaseModel):
+    client_id: str | None
+    child_id: uuid.UUID
+    # recorded, duplicate (sent before), already (marked in by someone else), rejected
+    status: Literal["recorded", "duplicate", "already", "rejected"]
+    message: str | None = None
+
+
+class RegisterSyncOut(BaseModel):
+    results: list[RegisterSyncResult]
+
+
+class AlertSettingsIn(BaseModel):
+    # Unset turns the morning non-arrival alert off.
+    arrival_alert_at: time | None = None
+
+
+class AlertSettingsOut(BaseModel):
+    arrival_alert_at: time | None
 
 
 class ChildIn(BaseModel):

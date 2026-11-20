@@ -33,6 +33,8 @@ export interface Child {
   full_name: string
   room: string | null
   active: boolean
+  /** ISO weekdays booked in: "12345" is Monday to Friday. */
+  session_days: string
 }
 
 export interface Authorisation {
@@ -51,6 +53,7 @@ export interface Authorisation {
   status: CheckResult
   authorised_by_name: string
   source: 'parent' | 'setting'
+  has_photo: boolean
 }
 
 export interface PassInfo {
@@ -91,6 +94,7 @@ export interface Check {
   kind: Kind | null
   valid_until: string | null
   restrictions: { person_name: string; reason: RestrictionReason }[]
+  has_photo: boolean
 }
 
 export interface Handover {
@@ -126,11 +130,63 @@ export interface DoorCheck {
   distance_m: number | null
 }
 
+export interface NonArrivalRun {
+  day: string
+  ran_at: string
+  expected: number
+  missing: number
+  alerted: number
+  suppressed_reason: string | null
+}
+
 export interface Today {
   released: number
   refused: number
   exceptions: number
   active_collectors: number
+  expected: number
+  arrived: number
+  absent: number
+  not_arrived: string[]
+  arrival_alert_at: string | null
+  alert_run: NonArrivalRun | null
+}
+
+export type AbsenceReason = 'ill' | 'appointment' | 'holiday' | 'other'
+
+export interface Absence {
+  id: string
+  child_id: string
+  day: string
+  reason: AbsenceReason
+  note: string | null
+  created_at: string
+}
+
+export interface RegisterChild {
+  child_id: string
+  full_name: string
+  room: string | null
+  expected: boolean
+  arrived_at: string | null
+  arrived_offline: boolean
+  absence_reason: AbsenceReason | null
+  absence_note: string | null
+  collected_at: string | null
+  collected_by: string | null
+}
+
+export interface Register {
+  day: string
+  children: RegisterChild[]
+  arrival_alert_at: string | null
+}
+
+export interface SyncResult {
+  client_id: string | null
+  child_id: string
+  status: 'recorded' | 'duplicate' | 'already' | 'rejected'
+  message: string | null
 }
 
 export interface Person {

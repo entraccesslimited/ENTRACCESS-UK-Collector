@@ -38,6 +38,7 @@ from app.models import (
     CheckResult,
     Child,
     CollectorKind,
+    CollectorPhoto,
     CollectorSource,
     DoorCheck,
     Handover,
@@ -321,10 +322,18 @@ async def authorisation_for_parent(
     return auth
 
 
+async def _drop_photo(session: AsyncSession, auth: Authorisation) -> None:
+    """A collector who can no longer collect has no need of a photo on file."""
+    photo = await session.get(CollectorPhoto, auth.id)
+    if photo is not None:
+        await session.delete(photo)
+
+
 async def revoke(session: AsyncSession, actor: User, auth: Authorisation) -> Authorisation:
     if auth.revoked_at is None:
         auth.revoked_at = datetime.now(UTC)
         auth.revoked_by_id = actor.id
+        await _drop_photo(session, auth)
         await audit(
             session,
             nursery_id=auth.nursery_id,
@@ -666,6 +675,7 @@ async def decide(
     session.add(handover)
     if release and auth.kind is CollectorKind.ONE_OFF:
         auth.used_at = now
+        await _drop_photo(session, auth)
     await session.flush()
     await notify_parents(session, handover)
     return handover

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 
 from sqlalchemy import (
     Boolean,
@@ -26,8 +26,10 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
+    Time,
     UniqueConstraint,
     Uuid,
     false,
@@ -168,6 +170,9 @@ class Nursery(Base):
     # A suspended nursery's people cannot sign in, and sessions already open
     # stop working. Nothing is deleted: reactivating restores everything.
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    # When parents are told a child expected today has not been marked in.
+    # Unset: no non-arrival alerts are sent.
+    arrival_alert_at: Mapped[time | None] = mapped_column(Time)
 
 
 class Operator(Base):
@@ -223,6 +228,9 @@ class Child(Base):
     room: Mapped[str | None] = mapped_column(String(80))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    # The weekdays the child is booked in, as ISO day numbers: "12345" is
+    # Monday to Friday. A non-arrival alert only ever concerns a booked day.
+    session_days: Mapped[str] = mapped_column(String(7), default="12345", server_default="12345")
 
 
 class ParentLink(Base):
@@ -288,6 +296,26 @@ class Authorisation(Base):
     authorised_by: Mapped[User] = relationship(foreign_keys=[authorised_by_id])
 
 
+class CollectorPhoto(Base):
+    """A photo of a collector, shown to staff at the door.
+
+    Kept apart from the authorisation so listing collectors never loads it.
+    Deleted when the collector is removed or their one-off collection has
+    happened, and when their authorisation runs out: it is only there to help
+    staff recognise someone, and nothing else may use it.
+    """
+
+    __tablename__ = "collector_photos"
+
+    authorisation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("authorisations.id", ondelete="CASCADE"), primary_key=True
+    )
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"), index=True)
+    content_type: Mapped[str] = mapped_column(String(20))
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
 class DoorCheck(Base):
     """Every attempt to verify a collector, whatever the answer. Append-only."""
 
@@ -347,6 +375,90 @@ class Handover(Base):
         _enum(IdCheckMethod, "id_check_method")
     )
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class Arrival(Base):
+    """A child marked in at the start of their day.
+
+    At most one per child per day, in the nursery's own day. `arrived_at` is
+    when staff marked it, which for a mark made without signal is earlier than
+    when it reached the server (`created_at`).
+    """
+
+    __tablename__ = "arrivals"
+    __table_args__ = (
+        UniqueConstraint("child_id", "day", name="uq_arrivals_child_day"),
+        UniqueConstraint("client_id", name="uq_arrivals_client_id"),
+        Index("ix_arrivals_nursery_day", "nursery_id", "day"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"))
+    child_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("children.id", ondelete="CASCADE"))
+    day: Mapped[date] = mapped_column(Date)
+    arrived_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    recorded_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    # Marked on a phone with no signal and sent later.
+    recorded_offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    # The phone's own id for the mark, so sending it twice records it once.
+    client_id: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class AbsenceReason(enum.StrEnum):
+    ILL = "ill"
+    APPOINTMENT = "appointment"
+    HOLIDAY = "holiday"
+    OTHER = "other"
+
+
+class Absence(Base):
+    """A day a child will not be in, told to the nursery in advance."""
+
+    __tablename__ = "absences"
+    __table_args__ = (Index("ix_absences_nursery_day", "nursery_id", "day"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"))
+    child_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("children.id", ondelete="CASCADE"))
+    day: Mapped[date] = mapped_column(Date)
+    reason: Mapped[AbsenceReason] = mapped_column(_enum(AbsenceReason, "absence_reason"))
+    note: Mapped[str | None] = mapped_column(String(300))
+    reported_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    cancelled_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+
+class NonArrivalRun(Base):
+    """One morning's non-arrival check for a nursery, whether or not it emailed anyone."""
+
+    __tablename__ = "non_arrival_runs"
+    __table_args__ = (UniqueConstraint("nursery_id", "day", name="uq_non_arrival_runs_day"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"))
+    day: Mapped[date] = mapped_column(Date)
+    ran_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    expected: Mapped[int] = mapped_column(Integer)
+    missing: Mapped[int] = mapped_column(Integer)
+    alerted: Mapped[int] = mapped_column(Integer)
+    # Why no parent was emailed, when the morning looked wrong rather than
+    # children being missing: nobody marked in at all, most of the room missing.
+    suppressed_reason: Mapped[str | None] = mapped_column(String(300))
+
+
+class NonArrivalAlert(Base):
+    """Parents told that a child expected today had not been marked in."""
+
+    __tablename__ = "non_arrival_alerts"
+    __table_args__ = (UniqueConstraint("child_id", "day", name="uq_non_arrival_alerts_child_day"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    nursery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("nurseries.id"))
+    child_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("children.id", ondelete="CASCADE"))
+    day: Mapped[date] = mapped_column(Date)
+    sent_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    parents: Mapped[int] = mapped_column(Integer)
 
 
 class Restriction(Base):

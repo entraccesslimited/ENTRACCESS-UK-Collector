@@ -1,4 +1,4 @@
-import type { Authorisation, CheckResult, IdCheckMethod, ReconciliationFlag, RestrictionReason } from './types'
+import type { AbsenceReason, Authorisation, CheckResult, IdCheckMethod, ReconciliationFlag, RestrictionReason } from './types'
 
 const LONDON = 'Europe/London'
 
@@ -56,7 +56,7 @@ export function validity(auth: Pick<Authorisation, 'kind' | 'valid_from' | 'vali
 }
 
 export const ID_CHECK_LABEL: Record<IdCheckMethod, string> = {
-  photo_id: 'Photo ID',
+  photo_id: 'ID document',
   known_to_staff: 'Known to staff',
   password: 'Password',
 }
@@ -88,4 +88,28 @@ function timeOf(value: string): string {
 
 export function code(value: string): string {
   return `${value.slice(0, 3)} ${value.slice(3)}`
+}
+
+export const ABSENCE_LABEL: Record<AbsenceReason, string> = {
+  ill: 'Ill',
+  appointment: 'Appointment',
+  holiday: 'Holiday',
+  other: 'Other',
+}
+
+/** ISO weekday numbers as the nursery reads them. */
+export const WEEKDAYS: { value: string; short: string }[] = [
+  { value: '1', short: 'Mon' },
+  { value: '2', short: 'Tue' },
+  { value: '3', short: 'Wed' },
+  { value: '4', short: 'Thu' },
+  { value: '5', short: 'Fri' },
+  { value: '6', short: 'Sat' },
+  { value: '7', short: 'Sun' },
+]
+
+export function sessionDays(days: string): string {
+  if (days === '12345') return 'Mon–Fri'
+  if (days === '1234567') return 'Every day'
+  return WEEKDAYS.filter((d) => days.includes(d.value)).map((d) => d.short).join(', ') || 'No days'
 }

@@ -5,19 +5,22 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Response, status
 from sqlalchemy import select
 
-from app import collection
+from app import collection, photos, register
 from app.config import get_settings
 from app.deps import ParentUser, SessionDep
 from app.models import Authorisation, Child, Handover, ParentLink, User
 from app.schemas import (
+    AbsenceIn,
+    AbsenceOut,
     AuthorisationIn,
     AuthorisationOut,
     ChildOut,
     HandoverOut,
     PassOut,
+    PhotoIn,
     SharedIn,
 )
 
@@ -44,6 +47,7 @@ async def authorisation_out(
         status=collection.status_of(auth, now),
         authorised_by_name=parent.full_name if parent else "Unknown",
         source=auth.source,
+        has_photo=await photos.has_photo(session, auth.id),
     )
 
 
@@ -173,3 +177,63 @@ async def history(parent: ParentUser, session: SessionDep) -> list[Handover]:
         .limit(200)
     )
     return list(rows.all())
+
+
+async def photo_response(session: SessionDep, auth: Authorisation) -> Response:
+    photo = await photos.get(session, auth.id)
+    if photo is None:
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
+    return Response(content=photo.data, media_type=photo.content_type)
+
+
+@router.get("/collectors/{authorisation_id}/photo")
+async def get_photo(
+    authorisation_id: uuid.UUID, parent: ParentUser, session: SessionDep
+) -> Response:
+    auth = await collection.authorisation_for_parent(session, parent, authorisation_id)
+    return await photo_response(session, auth)
+
+
+@router.put("/collectors/{authorisation_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def put_photo(
+    authorisation_id: uuid.UUID, body: PhotoIn, parent: ParentUser, session: SessionDep
+) -> None:
+    auth = await collection.authorisation_for_parent(session, parent, authorisation_id)
+    await photos.save(session, parent, auth, body.data_url)
+
+
+@router.delete("/collectors/{authorisation_id}/photo", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_photo(
+    authorisation_id: uuid.UUID, parent: ParentUser, session: SessionDep
+) -> None:
+    auth = await collection.authorisation_for_parent(session, parent, authorisation_id)
+    await photos.remove(session, parent, auth)
+
+
+@router.get("/children/{child_id}/absences", response_model=list[AbsenceOut])
+async def absences(
+    child_id: uuid.UUID, parent: ParentUser, session: SessionDep
+) -> list[AbsenceOut]:
+    child = await collection.child_for_parent(session, parent, child_id)
+    nursery = await collection.nursery_of(session, parent)
+    rows = await register.upcoming_absences(session, nursery, child.id)
+    return [AbsenceOut.model_validate(a) for a in rows]
+
+
+@router.post(
+    "/children/{child_id}/absences", response_model=AbsenceOut, status_code=status.HTTP_201_CREATED
+)
+async def report_absence(
+    child_id: uuid.UUID, body: AbsenceIn, parent: ParentUser, session: SessionDep
+) -> AbsenceOut:
+    absence = await register.report_absence(
+        session, parent, child_id, body.day, body.reason, body.note
+    )
+    return AbsenceOut.model_validate(absence)
+
+
+@router.post("/absences/{absence_id}/cancel", response_model=AbsenceOut)
+async def cancel_absence(
+    absence_id: uuid.UUID, parent: ParentUser, session: SessionDep
+) -> AbsenceOut:
+    return AbsenceOut.model_validate(await register.cancel_absence(session, parent, absence_id))

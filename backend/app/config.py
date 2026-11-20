@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     CODE_ATTEMPT_LIMIT: int = 5
     CODE_ATTEMPT_WINDOW_MINUTES: int = 15
 
+    # The housekeeping loop: the morning non-arrival check and clearing photos
+    # of collectors who can no longer collect. Off in tests, which call the
+    # same functions directly.
+    HOUSEKEEPING_ENABLED: bool = True
+    HOUSEKEEPING_SECONDS: int = 120
+
     EMAIL_ENABLED: bool = False
     EMAIL_FROM: str = "ENTRACCESS UK <no-reply@localhost>"
     SMTP_HOST: str = "localhost"

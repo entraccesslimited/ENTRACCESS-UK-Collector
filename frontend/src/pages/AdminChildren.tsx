@@ -3,7 +3,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { SharePass } from '@/components/SharePass'
 import { Alert, Badge, Modal, PageTitle, QR } from '@/components/ui'
 import { api } from '@/lib/api'
-import { code, day, RESTRICTION_LABEL, validity } from '@/lib/format'
+import { code, day, RESTRICTION_LABEL, sessionDays, validity, WEEKDAYS } from '@/lib/format'
 import { useLoad } from '@/lib/useLoad'
 import type { Authorisation, Child, Link, PassInfo, Person, Restriction, RestrictionReason } from '@/lib/types'
 
@@ -61,7 +61,10 @@ export function AdminChildren() {
                 <td className="font-medium">
                   {c.full_name} {!c.active && '(left)'}
                 </td>
-                <td>{c.room ?? '—'}</td>
+                <td>
+                  {c.room ?? '—'}
+                  <span className="block text-xs text-slate-500">{sessionDays(c.session_days)}</span>
+                </td>
                 <td>
                   {links.data
                     ?.filter((l) => l.child_id === c.id)
@@ -117,6 +120,12 @@ function ManageChild({ child, parents, onClose, onChanged }: { child: Child; par
       <div className="space-y-5">
         {error && <Alert>{error}</Alert>}
         {message && <Alert tone="ok">{message}</Alert>}
+        <BookedDays
+          child={child}
+          onSave={(days) =>
+            run(() => api(`/admin/children/${child.id}`, { method: 'PATCH', json: { session_days: days } }), 'Days booked in saved.')
+          }
+        />
         <section>
           <h3 className="mb-2 font-semibold">Link a parent</h3>
           <div className="flex flex-wrap gap-2">
@@ -460,5 +469,35 @@ function ImportContacts() {
       {error && <Alert>{error}</Alert>}
       {message && <Alert tone="ok">{message}</Alert>}
     </div>
+  )
+}
+
+
+function BookedDays({ child, onSave }: { child: Child; onSave: (days: string) => Promise<void> }) {
+  const [days, setDays] = useState(child.session_days)
+  const toggle = (d: string) => setDays(days.includes(d) ? days.replace(d, '') : [...days, d].sort().join(''))
+  return (
+    <section>
+      <h3 className="mb-1 font-semibold">Days booked in</h3>
+      <p className="mb-2 text-sm text-slate-600">
+        A parent is only told their child has not arrived on a day they are booked in.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {WEEKDAYS.map((d) => (
+          <button
+            key={d.value}
+            type="button"
+            aria-pressed={days.includes(d.value)}
+            onClick={() => toggle(d.value)}
+            className={`rounded-lg border px-3 py-1.5 text-sm ${days.includes(d.value) ? 'border-brand-600 bg-brand-50 font-semibold text-brand-800' : 'border-slate-300 text-slate-600'}`}
+          >
+            {d.short}
+          </button>
+        ))}
+        <button className="btn btn-secondary" disabled={!days || days === child.session_days} onClick={() => void onSave(days)}>
+          Save days
+        </button>
+      </div>
+    </section>
   )
 }

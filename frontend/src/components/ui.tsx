@@ -14,6 +14,16 @@ export function Badge({ status }: { status: CheckResult }) {
   return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>{STATUS_LABEL[status]}</span>
 }
 
+export function Pill({ tone = 'slate', children }: { tone?: 'slate' | 'green' | 'amber' | 'red'; children: ReactNode }) {
+  const style = {
+    slate: 'bg-slate-200 text-slate-700',
+    green: 'bg-emerald-100 text-emerald-800',
+    amber: 'bg-amber-100 text-amber-800',
+    red: 'bg-red-100 text-red-800',
+  }[tone]
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${style}`}>{children}</span>
+}
+
 export function Alert({ tone = 'error', children }: { tone?: 'error' | 'ok' | 'info'; children: ReactNode }) {
   const style =
     tone === 'error'

@@ -1,5 +1,5 @@
 import { Alert, PageTitle, Stat } from '@/components/ui'
-import { STATUS_LABEL, when } from '@/lib/format'
+import { clock, STATUS_LABEL, when } from '@/lib/format'
 import { useLoad } from '@/lib/useLoad'
 import type { DoorCheck, Today } from '@/lib/types'
 
@@ -17,6 +17,29 @@ export function AdminToday() {
           <Stat label="Exceptions at the door" value={today.data.exceptions} tone="amber" />
           <Stat label="Active collectors" value={today.data.active_collectors} />
         </div>
+      )}
+      {today.data && (
+        <section className="card mt-6">
+          <h2 className="mb-1 font-semibold">Register</h2>
+          <p className="text-sm text-slate-600">
+            <b>{today.data.arrived}</b> marked in of <b>{today.data.expected}</b> booked in today
+            {today.data.absent > 0 ? `, ${today.data.absent} off with an absence given` : ''}.
+          </p>
+          {today.data.not_arrived.length > 0 && (
+            <p className="mt-2 text-sm">
+              <span className="font-semibold text-amber-800">Not in yet:</span> {today.data.not_arrived.join(', ')}
+            </p>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            {today.data.alert_run
+              ? today.data.alert_run.suppressed_reason
+                ? `Non-arrival check at ${clock(today.data.alert_run.ran_at)}: ${today.data.alert_run.suppressed_reason}`
+                : `Non-arrival check at ${clock(today.data.alert_run.ran_at)}: parents of ${today.data.alert_run.alerted} child${today.data.alert_run.alerted === 1 ? '' : 'ren'} emailed.`
+              : today.data.arrival_alert_at
+                ? `Parents are told at ${today.data.arrival_alert_at.slice(0, 5)} if a child booked in has not arrived.`
+                : 'Non-arrival alerts are off. Turn them on in Settings.'}
+          </p>
+        </section>
       )}
       <section className="card mt-6 overflow-x-auto">
         <h2 className="mb-3 font-semibold">Exceptions in the last 30 days</h2>

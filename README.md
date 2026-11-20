@@ -21,6 +21,12 @@ does not replace registers, learning journals or staff judgement.
   any of them.
 - Remove a collector instantly, or issue a new pass and code (the old ones stop at once).
 - See every collection of their child, and every refusal.
+- Add a **photo of a collector** (optional), shown to staff at the door. The
+  phone shrinks it and drops its metadata before sending; it is deleted when
+  the collector is removed, their one-off collection happens or their
+  authorisation runs out.
+- Tell the nursery a child will be **off** on a day (ill, appointment,
+  holiday), up to 60 days ahead, so nobody is chased.
 
 **Room leaders**
 - Scan the collector's pass with the phone camera (or a scanner), or enter
@@ -30,9 +36,25 @@ does not replace registers, learning journals or staff judgement.
 - **Release**, recording how they confirmed who the collector is (photo ID,
   known to them, or the parent's password), or **refuse** (with a reason).
 - Both parents linked to the child are emailed straight away either way.
+- See the collector's photo, when the parent added one, beside the check. An ID
+  document confirms only that the name on it matches the collector's.
+- Keep the **arrival register**: mark each child in as they arrive, undo a
+  mistake, or record an absence phoned in. It **works without signal**: a mark
+  made offline waits on the phone with the time it was made and an id of its
+  own, and is sent as soon as the phone reconnects (recorded once, at the time
+  it was made, and flagged as an offline mark). The app opens offline too.
+  Door checks are never offline: only the server knows whether a pass was revoked.
 
 **Nursery managers**
-- Today's releases, refusals and exceptions at the door.
+- Today's releases, refusals and exceptions at the door, and the register:
+  who is in, who is off, who has not arrived.
+- **Same-morning non-arrival alerts**, at a time the manager chooses: each
+  parent of a child booked in today, not marked in and with no absence given
+  is emailed once. If nobody at all has been marked in, or most of the
+  children are missing, no parent is emailed and the managers are told the
+  register looks untaken instead; a missing child with no parent linked is
+  reported to the managers. Each child's booked days (Monday to Friday by
+  default) are set in Children.
 - The full handover record, filterable by date and exportable to CSV.
 - Children, parents, staff and who is linked to whom.
 - **Nursery contacts**: the people parents named on the registration form,

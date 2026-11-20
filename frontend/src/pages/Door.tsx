@@ -7,6 +7,7 @@ import { day, RESTRICTION_LABEL } from '@/lib/format'
 import { currentPosition } from '@/lib/location'
 import { useLoad } from '@/lib/useLoad'
 import type { Check, Child, Handover, IdCheckMethod } from '@/lib/types'
+import { DoorRegister } from '@/pages/DoorRegister'
 
 type Mode = 'scan' | 'code'
 
@@ -15,7 +16,38 @@ async function where(fenced: boolean) {
   return fenced ? { position: await currentPosition() } : {}
 }
 
+type View = 'collection' | 'register'
+
 export function Door() {
+  const [view, setView] = useState<View>('collection')
+  return (
+    <>
+      <div className="mb-5 inline-flex rounded-lg bg-slate-200 p-1" role="tablist">
+        {(['collection', 'register'] as View[]).map((v) => (
+          <button
+            key={v}
+            role="tab"
+            aria-selected={view === v}
+            onClick={() => setView(v)}
+            className={`rounded-md px-4 py-1.5 text-sm font-semibold ${view === v ? 'bg-white text-ink shadow' : 'text-slate-600'}`}
+          >
+            {v === 'collection' ? 'Collection' : 'Register'}
+          </button>
+        ))}
+      </div>
+      {view === 'collection' ? (
+        <DoorCheck />
+      ) : (
+        <>
+          <PageTitle title="Register" sub="Mark each child in as they arrive. Works without signal: marks are sent when the phone reconnects." />
+          <DoorRegister />
+        </>
+      )}
+    </>
+  )
+}
+
+function DoorCheck() {
   const [mode, setMode] = useState<Mode>('scan')
   const fence = useLoad<{ enabled: boolean }>('/door/geofence')
   const fenced = Boolean(fence.data?.enabled)
@@ -185,7 +217,7 @@ function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Han
   const [reason, setReason] = useState('')
   const [method, setMethod] = useState<IdCheckMethod | null>(null)
   const methods: { value: IdCheckMethod; title: string; help: string }[] = [
-    { value: 'photo_id', title: 'Photo ID', help: 'The name on it matches the collector’s.' },
+    { value: 'photo_id', title: 'ID document', help: 'The name on it matches the name shown here.' },
     { value: 'known_to_staff', title: 'I know them', help: 'You have seen them collect before.' },
     ...(check.note_for_staff
       ? [{ value: 'password' as const, title: 'Password', help: 'They gave the password in the parent’s note.' }]
@@ -231,6 +263,20 @@ function Result({ check, onDecided, onBack }: { check: Check; onDecided: (h: Han
           </ul>
           <p className="mt-1 text-red-800">If the person at the door is one of them, keep the child inside and tell the manager.</p>
         </div>
+      )}
+
+      {check.can_release && check.has_photo && (
+        <figure className="mt-4 flex items-center gap-4 rounded-lg bg-slate-50 p-3">
+          <img
+            src={`/api/door/checks/${check.check_id}/photo`}
+            alt={`Photo of ${check.collector_name ?? 'the collector'}`}
+            className="size-32 shrink-0 rounded-lg object-cover ring-1 ring-slate-300"
+          />
+          <figcaption className="text-sm text-slate-700">
+            <b>Does the person at the door look like this?</b>
+            <span className="block text-xs text-slate-600">Photo added by the parent, to help you recognise them. An ID document only confirms their name matches the one shown here.</span>
+          </figcaption>
+        </figure>
       )}
 
       {(check.child_name || check.collector_name) && (

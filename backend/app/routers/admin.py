@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app import collection, geofence
+from app import collection, geofence, register
 from app.accounts import send_invitation, send_welcome
 from app.deps import AdminUser, SessionDep
 from app.models import (
@@ -24,6 +24,7 @@ from app.models import (
     Handover,
     HandoverOutcome,
     IdCheckMethod,
+    NonArrivalRun,
     ParentLink,
     Restriction,
     User,
@@ -31,15 +32,19 @@ from app.models import (
 from app.routers.parent import authorisation_out
 from app.schemas import (
     ActivityOut,
+    AlertSettingsIn,
+    AlertSettingsOut,
     AuthorisationOut,
     ChildIn,
     ChildOut,
+    ChildUpdateIn,
     DoorCheckOut,
     GeofenceIn,
     GeofenceOut,
     HandoverOut,
     LinkIn,
     LinkOut,
+    NonArrivalRunOut,
     PersonIn,
     PersonOut,
     RestrictionIn,
@@ -86,11 +91,27 @@ async def today(admin: AdminUser, session: SessionDep) -> TodayOut:
             Authorisation.used_at.is_(None),
         )
     )
+    day = collection.local_date(nursery, datetime.now(UTC))
+    rows = await register.register_for(session, nursery, day)
+    expected = [r for r in rows if r.expected and r.absence is None]
+    run = await session.scalar(
+        select(NonArrivalRun).where(
+            NonArrivalRun.nursery_id == nursery.id, NonArrivalRun.day == day
+        )
+    )
     return TodayOut(
         released=await handovers(HandoverOutcome.RELEASED),
         refused=await handovers(HandoverOutcome.REFUSED),
         exceptions=int(exceptions or 0),
         active_collectors=int(active or 0),
+        expected=len(expected),
+        arrived=sum(1 for r in rows if r.arrival is not None),
+        absent=sum(1 for r in rows if r.absence is not None),
+        not_arrived=[
+            r.child.full_name for r in expected if r.arrival is None and r.collected is None
+        ],
+        arrival_alert_at=nursery.arrival_alert_at,
+        alert_run=NonArrivalRunOut.model_validate(run) if run else None,
     )
 
 
@@ -379,6 +400,54 @@ async def add_child(body: ChildIn, admin: AdminUser, session: SessionDep) -> Chi
         subject_id=child.id,
     )
     return child
+
+
+@router.patch("/children/{child_id}", response_model=ChildOut)
+async def update_child(
+    child_id: uuid.UUID, body: ChildUpdateIn, admin: AdminUser, session: SessionDep
+) -> Child:
+    """The child's room, and the days they are booked in."""
+    child = await collection.child_in_nursery(session, admin, child_id)
+    changes = []
+    if body.room is not None:
+        child.room = body.room.strip() or None
+        changes.append("room")
+    if body.session_days is not None:
+        child.session_days = register.valid_session_days(body.session_days)
+        changes.append("days")
+    if changes:
+        await collection.audit(
+            session,
+            nursery_id=admin.nursery_id,
+            actor=admin,
+            action="child.updated",
+            subject_id=child.id,
+            detail=f"{child.full_name}: {', '.join(changes)}",
+        )
+    return child
+
+
+@router.get("/alerts", response_model=AlertSettingsOut)
+async def alert_settings(admin: AdminUser, session: SessionDep) -> AlertSettingsOut:
+    nursery = await collection.nursery_of(session, admin)
+    return AlertSettingsOut(arrival_alert_at=nursery.arrival_alert_at)
+
+
+@router.put("/alerts", response_model=AlertSettingsOut)
+async def set_alert_settings(
+    body: AlertSettingsIn, admin: AdminUser, session: SessionDep
+) -> AlertSettingsOut:
+    nursery = await collection.nursery_of(session, admin)
+    at = body.arrival_alert_at.replace(second=0, microsecond=0) if body.arrival_alert_at else None
+    nursery.arrival_alert_at = at
+    await collection.audit(
+        session,
+        nursery_id=admin.nursery_id,
+        actor=admin,
+        action="alerts.updated",
+        detail=f"non-arrival alert at {at:%H:%M}" if at else "non-arrival alert off",
+    )
+    return AlertSettingsOut(arrival_alert_at=at)
 
 
 @router.post("/children/{child_id}/leave", response_model=ChildOut)

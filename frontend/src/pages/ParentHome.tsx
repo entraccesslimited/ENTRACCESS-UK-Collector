@@ -1,11 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 
 import { SharePass } from '@/components/SharePass'
 import { Alert, Badge, Modal, PageTitle, QR } from '@/components/ui'
 import { api } from '@/lib/api'
-import { code, todayIso, validity } from '@/lib/format'
+import { ABSENCE_LABEL, code, day, todayIso, validity } from '@/lib/format'
+import { shrink } from '@/lib/photo'
 import { useLoad } from '@/lib/useLoad'
-import type { Authorisation, Child, Kind, PassInfo } from '@/lib/types'
+import type { Absence, AbsenceReason, Authorisation, Child, Kind, PassInfo } from '@/lib/types'
 
 export function ParentHome() {
   const children = useLoad<Child[]>('/parent/children')
@@ -31,6 +32,7 @@ function ChildCollectors({ child }: { child: Child }) {
   const [adding, setAdding] = useState(false)
   const [showing, setShowing] = useState<Authorisation | null>(null)
   const [showOld, setShowOld] = useState(false)
+  const [absent, setAbsent] = useState(false)
 
   const current = list.data?.filter((a) => a.status === 'valid' || a.status === 'not_yet_valid') ?? []
   const past = list.data?.filter((a) => !(a.status === 'valid' || a.status === 'not_yet_valid')) ?? []
@@ -42,10 +44,16 @@ function ChildCollectors({ child }: { child: Child }) {
           <h2 className="text-lg font-semibold">{child.full_name}</h2>
           {child.room && <p className="text-sm text-slate-500">{child.room}</p>}
         </div>
-        <button className="btn btn-primary" onClick={() => setAdding(true)}>
-          Add a collector
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-secondary" onClick={() => setAbsent(!absent)}>
+            {absent ? 'Close' : `${child.full_name.split(' ')[0]} is off`}
+          </button>
+          <button className="btn btn-primary" onClick={() => setAdding(true)}>
+            Add a collector
+          </button>
+        </div>
       </div>
+      {absent && <Absences child={child} />}
 
       {list.error && <div className="mt-3"><Alert>{list.error}</Alert></div>}
       {current.length === 0 && !list.loading && (
@@ -54,12 +62,15 @@ function ChildCollectors({ child }: { child: Child }) {
       <ul className="mt-4 divide-y divide-slate-100">
         {current.map((auth) => (
           <li key={auth.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-            <div>
+            <div className="flex items-center gap-3">
+              <CollectorPhoto auth={auth} onChanged={() => void list.reload()} />
+              <div>
               <p className="font-medium">
                 {auth.collector_name} <span className="text-sm font-normal text-slate-500">· {auth.collector_relationship}</span>
               </p>
               <p className="text-sm text-slate-600">{validity(auth)}</p>
               {auth.source === 'setting' && <p className="text-xs text-slate-500">Added by the nursery from your registration form</p>}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Badge status={auth.status} />
@@ -139,6 +150,7 @@ function AddCollector({
   })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [photo, setPhoto] = useState<string | null>(null)
   const set = (key: keyof typeof form) => (event: { target: { value: string } }) =>
     setForm({ ...form, [key]: event.target.value })
 
@@ -166,6 +178,14 @@ function AddCollector({
           ...body,
         },
       })
+      if (photo) {
+        try {
+          await api(`/parent/collectors/${auth.id}/photo`, { method: 'PUT', json: { data_url: photo } })
+        } catch {
+          // The collector is added either way; the photo can be added from the list.
+        }
+      }
+      setPhoto(null)
       onAdded(auth)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not add the collector.')
@@ -232,6 +252,7 @@ function AddCollector({
             </label>
           </div>
         )}
+        <PhotoPicker value={photo} onChange={setPhoto} onError={setError} />
         <label className="block">
           <span className="label">Anything staff should know (optional)</span>
           <input className="input" placeholder="e.g. will ask for our family password" value={form.note_for_staff} onChange={set('note_for_staff')} maxLength={300} />
@@ -307,5 +328,195 @@ function PassDialog({ auth, onClose, onChanged }: { auth: Authorisation; onClose
         </div>
       </div>
     </Modal>
+  )
+}
+
+
+function PhotoPicker({
+  value,
+  onChange,
+  onError,
+}: {
+  value: string | null
+  onChange: (dataUrl: string | null) => void
+  onError: (message: string) => void
+}) {
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
+      {value ? (
+        <img src={value} alt="The collector" className="size-16 rounded-lg object-cover ring-1 ring-slate-300" />
+      ) : (
+        <div className="grid size-16 place-items-center rounded-lg bg-slate-200 text-xs text-slate-500">No photo</div>
+      )}
+      <div className="text-sm">
+        <p className="font-medium">A photo helps staff recognise them (optional)</p>
+        <p className="text-xs text-slate-600">Only staff see it, at the door. It is deleted when this collector can no longer collect.</p>
+        <div className="mt-1 flex gap-3">
+          <button type="button" className="text-brand-700 underline" onClick={() => input.current?.click()}>
+            {value ? 'Change photo' : 'Add a photo'}
+          </button>
+          {value && (
+            <button type="button" className="text-slate-500 underline" onClick={() => onChange(null)}>
+              Remove
+            </button>
+          )}
+        </div>
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (!file) return
+          try {
+            onChange(await shrink(file))
+          } catch (err) {
+            onError(err instanceof Error ? err.message : 'That photo could not be used.')
+          }
+        }}
+      />
+    </div>
+  )
+}
+
+function CollectorPhoto({ auth, onChanged }: { auth: Authorisation; onChanged: () => void }) {
+  const input = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [version, setVersion] = useState(0)
+  const url = `/api/parent/collectors/${auth.id}/photo`
+
+  const upload = async (file: File) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await api(`/parent/collectors/${auth.id}/photo`, { method: 'PUT', json: { data_url: await shrink(file) } })
+      setVersion(version + 1)
+      onChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add the photo.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        className="size-12 overflow-hidden rounded-lg bg-slate-200 text-[10px] leading-tight text-slate-600 ring-1 ring-slate-300"
+        onClick={() => input.current?.click()}
+        title={auth.has_photo ? 'Change photo' : 'Add a photo'}
+        disabled={busy}
+      >
+        {auth.has_photo ? <img src={`${url}?v=${version}`} alt={auth.collector_name} className="size-full object-cover" /> : busy ? '…' : 'Add photo'}
+      </button>
+      {auth.has_photo && (
+        <button
+          type="button"
+          className="text-[10px] text-slate-500 underline"
+          onClick={async () => {
+            await api(`/parent/collectors/${auth.id}/photo`, { method: 'DELETE' })
+            onChanged()
+          }}
+        >
+          Remove
+        </button>
+      )}
+      {error && <span className="max-w-[8rem] text-[10px] text-red-700">{error}</span>}
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) void upload(file)
+        }}
+      />
+    </div>
+  )
+}
+
+function Absences({ child }: { child: Child }) {
+  const list = useLoad<Absence[]>(`/parent/children/${child.id}/absences`)
+  const [form, setForm] = useState<{ day: string; reason: AbsenceReason; note: string }>({ day: todayIso(), reason: 'ill', note: '' })
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
+  const first = child.full_name.split(' ')[0]
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setError(null)
+    setSaved(null)
+    try {
+      await api(`/parent/children/${child.id}/absences`, {
+        method: 'POST',
+        json: { day: form.day, reason: form.reason, note: form.note || null },
+      })
+      setSaved(`The nursery knows ${first} is off on ${day(form.day)}.`)
+      setForm({ ...form, note: '' })
+      await list.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not tell the nursery.')
+    }
+  }
+
+  return (
+    <div className="mt-4 rounded-lg bg-slate-50 p-4">
+      <p className="font-semibold">Tell the nursery {first} is off</p>
+      <p className="text-sm text-slate-600">So they do not chase you when {first} is not in.</p>
+      {error && <div className="mt-2"><Alert>{error}</Alert></div>}
+      {saved && <div className="mt-2"><Alert tone="ok">{saved}</Alert></div>}
+      <form onSubmit={submit} className="mt-3 grid gap-3 sm:grid-cols-3">
+        <label className="block">
+          <span className="label">Day</span>
+          <input className="input" type="date" min={todayIso()} value={form.day} onChange={(e) => setForm({ ...form, day: e.target.value })} required />
+        </label>
+        <label className="block">
+          <span className="label">Reason</span>
+          <select className="input" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value as AbsenceReason })}>
+            {(Object.keys(ABSENCE_LABEL) as AbsenceReason[]).map((r) => (
+              <option key={r} value={r}>
+                {ABSENCE_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">Note (optional)</span>
+          <input className="input" value={form.note} maxLength={300} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+        </label>
+        <div className="sm:col-span-3">
+          <button className="btn btn-primary">Tell the nursery</button>
+        </div>
+      </form>
+      {(list.data?.length ?? 0) > 0 && (
+        <ul className="mt-4 divide-y divide-slate-200 text-sm">
+          {list.data?.map((a) => (
+            <li key={a.id} className="flex items-center justify-between py-2">
+              <span>
+                {day(a.day)} · {ABSENCE_LABEL[a.reason]}
+                {a.note ? ` · ${a.note}` : ''}
+              </span>
+              <button
+                className="text-slate-500 underline"
+                onClick={async () => {
+                  await api(`/parent/absences/${a.id}/cancel`, { method: 'POST' })
+                  await list.reload()
+                }}
+              >
+                Cancel
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

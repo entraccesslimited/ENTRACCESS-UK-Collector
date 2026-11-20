@@ -17,8 +17,9 @@ interface Fence {
 export function AdminSettings() {
   return (
     <>
-      <PageTitle title="Settings" sub="How door checks work at this nursery." />
+      <PageTitle title="Settings" sub="How door checks and the register work at this nursery." />
       <GeofenceCard />
+      <ArrivalAlertCard />
     </>
   )
 }
@@ -153,6 +154,67 @@ function GeofenceCard() {
             </button>
           )}
         </div>
+      </form>
+    </section>
+  )
+}
+
+
+function ArrivalAlertCard() {
+  const current = useLoad<{ arrival_alert_at: string | null }>('/admin/alerts')
+  const [at, setAt] = useState('09:30')
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (current.data?.arrival_alert_at) setAt(current.data.arrival_alert_at.slice(0, 5))
+  }, [current.data])
+
+  const save = async (value: string | null) => {
+    setError(null)
+    setMessage(null)
+    try {
+      await api('/admin/alerts', { method: 'PUT', json: { arrival_alert_at: value } })
+      setMessage(value ? `Parents will be told at ${value} if a child booked in has not arrived.` : 'Non-arrival alerts are off.')
+      await current.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save.')
+    }
+  }
+
+  const on = Boolean(current.data?.arrival_alert_at)
+  return (
+    <section className="card mt-6 max-w-2xl space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Non-arrival alerts</h2>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${on ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+          {on ? `On at ${current.data?.arrival_alert_at?.slice(0, 5)}` : 'Off'}
+        </span>
+      </div>
+      <p className="text-sm text-slate-600">
+        At the time you choose, each parent of a child who is booked in today, has not been marked in on the Register, and has no
+        absence given is emailed once. If nobody at all has been marked in, or most of the children are missing, no parent is emailed:
+        managers are told the register looks untaken instead.
+      </p>
+      {error && <Alert>{error}</Alert>}
+      {message && <Alert tone="ok">{message}</Alert>}
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault()
+          void save(at)
+        }}
+      >
+        <label className="block">
+          <span className="label">Alert time</span>
+          <input className="input" type="time" value={at} onChange={(e) => setAt(e.target.value)} required />
+        </label>
+        <button className="btn btn-primary">{on ? 'Save time' : 'Turn on'}</button>
+        {on && (
+          <button type="button" className="btn btn-secondary" onClick={() => void save(null)}>
+            Turn off
+          </button>
+        )}
       </form>
     </section>
   )
