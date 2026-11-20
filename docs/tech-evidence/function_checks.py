@@ -1,4 +1,4 @@
-"""Run the Collector's test groups T01-T08 and record one result per group.
+"""Run the Collector's test groups T01-T11 and record one result per group.
 
 Run from the repository root with the backend's environment:
 
@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 C, K = "tests/test_collection.py", "tests/test_company.py"
+R = "tests/test_register_photos_alerts.py"
 
 CHECKS = [
     (
@@ -114,6 +115,30 @@ CHECKS = [
             ],
             ["tests/test_contacts_reports.py"],
         ],
+    ),
+    (
+        "T09",
+        "Arrival register, absences and offline marks",
+        [[R, "-k", "TestTheRegister or TestOfflineMarks or TestAbsences"]],
+    ),
+    (
+        "T10",
+        "Same-morning non-arrival alerts and their guards",
+        [
+            [
+                R,
+                "-k",
+                (
+                    "TestWhenTheCheckIsDue or TestNonArrivalAlerts or TestAChildWithNoParentLinked"
+                    " or TestManagerSettings"
+                ),
+            ]
+        ],
+    ),
+    (
+        "T11",
+        "Collector photos at the door",
+        [[R, "-k", "TestCollectorPhotos"]],
     ),
 ]
 

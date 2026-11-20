@@ -54,5 +54,26 @@
     "status": "PASS",
     "passed": 23,
     "failed": 0
+  },
+  {
+    "id": "T09",
+    "description": "Arrival register, absences and offline marks",
+    "status": "PASS",
+    "passed": 11,
+    "failed": 0
+  },
+  {
+    "id": "T10",
+    "description": "Same-morning non-arrival alerts and their guards",
+    "status": "PASS",
+    "passed": 8,
+    "failed": 0
+  },
+  {
+    "id": "T11",
+    "description": "Collector photos at the door",
+    "status": "PASS",
+    "passed": 7,
+    "failed": 0
   }
 ]
