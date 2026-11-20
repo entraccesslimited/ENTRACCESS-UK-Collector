@@ -22,8 +22,9 @@ export function Privacy() {
 
         <div className="card mt-6">
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
-            <div><dt className="text-slate-500">Company</dt><dd>ENTRACCESS UK LTD, registered in England and Wales ([COMPANY NUMBER])</dd></div>
-            <div><dt className="text-slate-500">ICO registration</dt><dd>[ICO REGISTRATION NUMBER]</dd></div>
+            <div><dt className="text-slate-500">Company</dt><dd>ENTRACCESS UK LTD, registered in England and Wales, company number 17517317</dd></div>
+            <div><dt className="text-slate-500">Registered office</dt><dd>40 Waingate, Sheffield, S3 8LB</dd></div>
+            <div><dt className="text-slate-500">ICO registration</dt><dd>Not yet registered. We will register with the ICO before any setting uses Collector with real families.</dd></div>
             <div><dt className="text-slate-500">Law</dt><dd>UK GDPR and the Data Protection Act 2018</dd></div>
             <div><dt className="text-slate-500">Our role</dt><dd>Processor for each setting; controller for our own records</dd></div>
             <div className="sm:col-span-2"><dt className="text-slate-500">Contact</dt><dd><a className="text-brand-700 underline" href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></dd></div>

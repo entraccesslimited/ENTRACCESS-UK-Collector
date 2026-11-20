@@ -74,7 +74,7 @@ export function SiteLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <p className="border-t border-white/10 px-4 py-4 text-center text-xs">
-          © 2026 ENTRACCESS UK LTD. Registered in England and Wales.
+          © 2026 ENTRACCESS UK LTD. Registered in England and Wales, company number 17517317. Registered office: 40 Waingate, Sheffield, S3 8LB.
         </p>
       </footer>
     </div>
