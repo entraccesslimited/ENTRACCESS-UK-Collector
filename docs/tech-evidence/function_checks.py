@@ -46,9 +46,11 @@ CHECKS = [
             [
                 C,
                 "-k",
-                "authorise_check_release or daily_code or code_does_not_work or refusal_needs"
-                " or decided_once or release_needs_the_id or refusal_does_not_need or wrong_codes_pause"
-                " or parents_cannot_use_the_door",
+                (
+                    "authorise_check_release or daily_code or code_does_not_work or refusal_needs"
+                    " or decided_once or release_needs_the_id or refusal_does_not_need or wrong_codes_pause"
+                    " or parents_cannot_use_the_door"
+                ),
             ]
         ],
     ),
@@ -59,8 +61,10 @@ CHECKS = [
             [
                 C,
                 "-k",
-                "second_collector or two_valid_checks or refusal_does_not_count"
-                " or yesterdays or sibling",
+                (
+                    "second_collector or two_valid_checks or refusal_does_not_count"
+                    " or yesterdays or sibling"
+                ),
             ]
         ],
     ),
@@ -71,8 +75,10 @@ CHECKS = [
             [
                 C,
                 "-k",
-                "another_child or not_theirs or another_familys or another_nurserys"
-                " or one_nursery_fails",
+                (
+                    "another_child or not_theirs or another_familys or another_nurserys"
+                    " or one_nursery_fails"
+                ),
             ],
             [K, "-k", "portals_do_not_cross or nurseries_cannot_read"],
         ],
@@ -101,8 +107,10 @@ CHECKS = [
             [
                 C,
                 "-k",
-                "tell_both_parents or refusal_needs or handovers_are_never_edited"
-                " or admin_sees_handovers or export_and_the_activity",
+                (
+                    "tell_both_parents or refusal_needs or handovers_are_never_edited"
+                    " or admin_sees_handovers or export_and_the_activity"
+                ),
             ],
             ["tests/test_contacts_reports.py"],
         ],
@@ -113,6 +121,7 @@ CHECKS = [
 def run(args: list[str]) -> tuple[int, int, int]:
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *args],
+        check=False,
         cwd=BACKEND,
         capture_output=True,
         text=True,
