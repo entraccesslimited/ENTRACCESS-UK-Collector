@@ -1,0 +1,58 @@
+[
+  {
+    "id": "T01",
+    "description": "Pass signing and signature rejection",
+    "status": "PASS",
+    "passed": 5,
+    "failed": 0
+  },
+  {
+    "id": "T02",
+    "description": "Revocation, reissue and one-off passes",
+    "status": "PASS",
+    "passed": 8,
+    "failed": 0
+  },
+  {
+    "id": "T03",
+    "description": "Door verification and release",
+    "status": "PASS",
+    "passed": 9,
+    "failed": 0
+  },
+  {
+    "id": "T04",
+    "description": "One release per child per day under concurrent checks",
+    "status": "PASS",
+    "passed": 5,
+    "failed": 0
+  },
+  {
+    "id": "T05",
+    "description": "Nursery isolation",
+    "status": "PASS",
+    "passed": 7,
+    "failed": 0
+  },
+  {
+    "id": "T06",
+    "description": "Operator blindness and role separation",
+    "status": "PASS",
+    "passed": 6,
+    "failed": 0
+  },
+  {
+    "id": "T07",
+    "description": "Reconciliation with the nursery's sign-out register",
+    "status": "PASS",
+    "passed": 36,
+    "failed": 0
+  },
+  {
+    "id": "T08",
+    "description": "Parent notification, handover record and evidence export",
+    "status": "PASS",
+    "passed": 23,
+    "failed": 0
+  }
+]
